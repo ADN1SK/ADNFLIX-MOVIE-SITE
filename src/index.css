@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+
+  --color-primary: #E50914; /* Electric Crimson */
+  --color-midnight: #0A0E17; /* Deep Midnight */
+  --color-charcoal: #1A1D25; /* Elevated Surface */
+  --color-gold: #D4AF37; /* Rating Highlight */
+  --color-cream: #F5F0E8; /* Soft Text */
+  
+  --color-bg-main: var(--color-midnight);
+  --color-text-main: var(--color-cream);
+  --color-card-bg: var(--color-charcoal);
+
+  /* Skeuomorphic Shadow System */
+  --shadow-skeuo-sm: 2px 2px 5px rgba(0, 0, 0, 0.5), -1px -1px 2px rgba(255, 255, 255, 0.05);
+  --shadow-skeuo-md: 4px 4px 10px rgba(0, 0, 0, 0.6), -2px -2px 4px rgba(255, 255, 255, 0.05);
+  --shadow-skeuo-lg: 10px 10px 20px rgba(0, 0, 0, 0.7), -4px -4px 8px rgba(255, 255, 255, 0.05);
+  --shadow-skeuo-inner: inset 2px 2px 5px rgba(0, 0, 0, 0.4), inset -1px -1px 2px rgba(255, 255, 255, 0.05);
+
+  --animate-shimmer: shimmer 2s infinite linear;
+}
+
+.light {
+  --color-bg-main: #F5F0E8;
+  --color-text-main: #1A1D25;
+  --color-card-bg: #FFFFFF;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@layer base {
+  body {
+    @apply bg-bg-main text-text-main font-sans antialiased transition-colors duration-300;
+  }
+
+  body.light {
+    --color-bg-main: #F5F0E8;
+    --color-text-main: #1A1D25;
+    --color-card-bg: #FFFFFF;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .glass-nav {
+    @apply backdrop-blur-md border-b border-primary/20 bg-bg-main/70;
+  }
+
+  body.light .glass-nav {
+    @apply bg-white/70 border-black/5;
+  }
+
+  .skeuo-card {
+    @apply bg-card-bg rounded-xl shadow-skeuo-md border border-text-main/5 transition-all duration-300;
+  }
+
+  .light .skeuo-card {
+    @apply border-black/5 shadow-lg;
+  }
+
+  .skeuo-card:hover {
+    @apply -translate-y-1.5 shadow-skeuo-lg border-primary/30;
+  }
+
+  .skeuo-card:active {
+    @apply translate-y-0.5 shadow-skeuo-inner;
+  }
+}
