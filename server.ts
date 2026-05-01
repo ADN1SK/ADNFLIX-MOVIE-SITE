@@ -1,15 +1,15 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Simple in-memory cache for TMDB proxy responses
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 async function startServer() {
   const app = express();
@@ -43,12 +43,30 @@ async function startServer() {
 
   // TMDB Proxy (to keep key on server)
   app.get("/api/movies/*", async (req, res) => {
+    const cacheKey = req.url;
+    const now = Date.now();
+
+    // 1. Check if we have a valid cached response
+    if (cache.has(cacheKey)) {
+      const cached = cache.get(cacheKey)!;
+      if (now - cached.timestamp < CACHE_TTL) {
+        return res.json(cached.data);
+      }
+      cache.delete(cacheKey); // Remove expired entry
+    }
+
     const tmdbUrl = `https://api.themoviedb.org/3${req.url.replace("/api/movies", "")}${req.url.includes("?") ? "&" : "?"}api_key=${process.env.TMDB_API_KEY || "d24d707ba3fb208316f0a0ec7589a90f"}`;
     try {
       const response = await fetch(tmdbUrl);
       const data = await response.json();
+      
+      // 2. Cache successful responses
+      if (response.ok) {
+        cache.set(cacheKey, { data, timestamp: now });
+      }
+
       res.json(data);
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch from TMDB" });
     }
   });

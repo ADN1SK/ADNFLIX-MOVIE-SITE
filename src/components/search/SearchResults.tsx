@@ -4,7 +4,7 @@
  */
 
 import { motion } from "motion/react";
-import { Star, Search as SearchIcon, X } from "lucide-react";
+import { Star, Search as SearchIcon } from "lucide-react";
 import { Movie } from "@/src/types";
 import { TMDB_CONFIG } from "@/src/constants";
 import { Link } from "react-router-dom";

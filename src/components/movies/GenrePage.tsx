@@ -14,6 +14,7 @@ export default function GenrePage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const genreName = searchParams.get("name") || id;
+  const selectedYear = searchParams.get("year");
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,8 +23,11 @@ export default function GenrePage() {
       setLoading(true);
       try {
         // Correct TMDB endpoint for genre discovery
-        const endpoint = id 
-          ? `/api/movies/discover/movie?with_genres=${id}` 
+        const yearParam = selectedYear
+          ? `&primary_release_year=${selectedYear}`
+          : "";
+        const endpoint = id
+          ? `/api/movies/discover/movie?with_genres=${id}${yearParam}`
           : `/api/movies/movie/popular`;
         
         const res = await fetch(endpoint);
@@ -37,7 +41,7 @@ export default function GenrePage() {
     };
     fetchGenreMovies();
     window.scrollTo(0, 0);
-  }, [id]);
+  }, [id, selectedYear]);
 
   if (loading) return (
     <div className="h-screen w-full flex items-center justify-center bg-bg-main pt-20">
@@ -52,7 +56,9 @@ export default function GenrePage() {
            <div>
               <div className="flex items-center gap-3 mb-2">
                 <Film className="w-6 h-6 text-primary" />
-                <h1 className="text-4xl font-bold tracking-tight uppercase">{genreName} Cinema</h1>
+                <h1 className="text-4xl font-bold tracking-tight uppercase">
+                  {genreName} {selectedYear ? selectedYear : ""} Cinema
+                </h1>
               </div>
               <p className="text-text-main/40 uppercase tracking-widest text-[10px] font-bold">Discovering {genreName} on ADNFLIX</p>
            </div>

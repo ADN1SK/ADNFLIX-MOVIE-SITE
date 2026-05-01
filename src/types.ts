@@ -11,6 +11,7 @@ export interface Movie {
   revenue?: number;
   budget?: number;
   tagline?: string;
+  homepage?: string | null;
 }
 
 export interface Cast {
