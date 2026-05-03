@@ -40,6 +40,35 @@ export default function Navbar() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
+  // Logic for logo speed boost and sound effect
+  const [logoDuration, setLogoDuration] = useState(20);
+  const isFirstRender = React.useRef(true);
+
+  useEffect(() => {
+    // Skip the speed boost on initial mount
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    // Temporarily increase logo spin speed (lower duration = faster spin)
+    setLogoDuration(0.6);
+    const timer = setTimeout(() => setLogoDuration(20), 1200);
+    return () => clearTimeout(timer);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    toggleTheme();
+
+    // Play a subtle switch sound
+    // Note: Use a local asset like '/sounds/toggle.mp3' in production
+    const audio = new Audio(
+      "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
+    );
+    audio.volume = 0.2;
+    audio.play().catch(() => {}); // Browsers may block audio until first user interaction
+  };
+
   const isDashboard = location.pathname === "/dashboard";
   const dashboardMenuItems = [
     { label: "Home", path: "/", icon: Home },
@@ -156,7 +185,7 @@ export default function Navbar() {
   return (
     <nav
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 h-20 flex items-center px-4 md:px-8",
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out h-20 flex items-center px-4 md:px-8",
         isScrolled ? "glass-nav shadow-lg" : "bg-transparent",
       )}
     >
@@ -169,8 +198,8 @@ export default function Navbar() {
             className={cn(
               "flex items-center justify-center w-10 h-10 rounded-lg transition-all shadow-skeuo-sm border",
               isDashboard || isDashboardMenuOpen
-                ? "bg-primary/10 border-primary/30 shadow-skeuo-md"
-                : "bg-card-bg border-text-main/5 hover:border-primary/30 hover:shadow-skeuo-md",
+                ? "bg-primary/10 border-primary/30 shadow-skeuo-md cursor-default"
+                : "bg-card-bg border-text-main/5 hover:border-primary/30 hover:shadow-skeuo-md cursor-pointer",
             )}
           >
             <LayoutDashboard
@@ -204,7 +233,7 @@ export default function Navbar() {
                         key={item.label}
                         to={item.path}
                         onClick={() => setIsDashboardMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold text-text-main/70 transition-colors hover:bg-primary/10 hover:text-primary"
+                        className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold text-text-main/70 transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer"
                       >
                         <Icon className="w-4 h-4" />
                         <span>{item.label}</span>
@@ -219,7 +248,10 @@ export default function Navbar() {
 
         {/* Mobile Menu Toggle */}
         <button
-          className={cn("md:hidden p-2", isSearchExpanded && "hidden")}
+          className={cn(
+            "md:hidden p-2 cursor-pointer",
+            isSearchExpanded && "hidden",
+          )}
           onClick={() => setIsMobileMenuOpen(true)}
         >
           <Menu className="w-6 h-6 text-text-main" />
@@ -236,7 +268,11 @@ export default function Navbar() {
           <div className="relative w-10 h-10 flex items-center justify-center">
             <motion.div
               animate={{ rotate: 360 }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+              transition={{
+                duration: logoDuration,
+                repeat: Infinity,
+                ease: "linear",
+              }}
               className="absolute inset-0 border-2 border-dashed border-primary/40 rounded-full"
             />
             <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(229,9,20,0.5)]">
@@ -263,7 +299,7 @@ export default function Navbar() {
             }}
             className={cn(
               "relative group transition-all duration-500 flex items-center w-full",
-              isSearchExpanded ? "md:scale-105" : "",
+              isSearchExpanded ? "md:scale-105 cursor-text" : "cursor-pointer",
             )}
           >
             <div
@@ -275,13 +311,13 @@ export default function Navbar() {
                   : "group-hover:border-text-main/20",
               )}
             />
-            <Search className="absolute left-4 w-4 h-4 text-text-main/50 pointer-events-none" />
+            <Search className="absolute left-4 w-4 h-4 text-text-main/50 pointer-events-none z-10" />
             <input
               type="text"
               placeholder="Search ADNFLIX..."
               className={cn(
                 "w-full bg-transparent border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-sm py-2.5 pl-12 pr-36 transition-opacity",
-                "text-text-main placeholder:text-text-main/30",
+                "text-text-main placeholder:text-text-main/30 cursor-text",
                 !isSearchExpanded && "opacity-0 md:opacity-100",
               )}
               value={searchQuery}
@@ -300,7 +336,7 @@ export default function Navbar() {
                   setIsSearchExpanded(true);
                   searchInputRef.current?.focus();
                 }}
-                className="absolute right-3 hidden sm:flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-text-main/35 outline-none hover:text-primary focus:outline-none focus-visible:outline-none transition-colors"
+                className="absolute right-3 hidden sm:flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-text-main/35 outline-none hover:text-primary focus:outline-none focus-visible:outline-none transition-colors cursor-pointer"
               >
                 <span>Click</span>
                 <kbd className="min-w-5 rounded-md border border-text-main/10 bg-bg-main/50 px-1.5 py-0.5 font-mono text-[10px] text-text-main/50">
@@ -313,7 +349,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-4 p-1 text-text-main/30 hover:text-primary transition-colors"
+                className="absolute right-4 p-1 text-text-main/30 hover:text-primary transition-colors cursor-pointer z-10"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -364,7 +400,7 @@ export default function Navbar() {
               >
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="self-end p-2 mb-8"
+                  className="self-end p-2 mb-8 cursor-pointer"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -385,7 +421,7 @@ export default function Navbar() {
                         "text-xl font-bold tracking-widest uppercase py-2 border-b border-text-main/5",
                         location.pathname === item.path
                           ? "text-primary"
-                          : "text-text-main/60",
+                          : "text-text-main/60 cursor-pointer",
                       )}
                     >
                       {item.label}
@@ -404,20 +440,34 @@ export default function Navbar() {
             isSearchExpanded && "hidden md:flex",
           )}
         >
-          <button
-            onClick={toggleTheme}
-            className="flex p-2 rounded-full hover:bg-black/5 transition-colors text-text-main/80"
+          <motion.button
+            whileTap={{ scale: 0.9, rotate: 15 }}
+            onClick={handleToggleTheme}
+            className="flex p-2 rounded-full hover:bg-black/5 transition-colors text-text-main/80 cursor-pointer overflow-hidden"
           >
-            {theme === "dark" ? (
-              <Sun className="w-5 h-5 text-gold" />
-            ) : (
-              <Moon className="w-5 h-5 text-primary" />
-            )}
-          </button>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={theme}
+                initial={{ rotate: -90, opacity: 0, scale: 0.5 }}
+                animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                exit={{ rotate: 90, opacity: 0, scale: 0.5 }}
+                transition={{ duration: 0.3, ease: "circOut" }}
+              >
+                {theme === "dark" ? (
+                  <Sun className="w-5 h-5 text-gold" />
+                ) : (
+                  <Moon className="w-5 h-5 text-primary" />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </motion.button>
 
           <div className="h-8 w-[1px] bg-text-main/10 hidden md:block mx-1" />
 
-          <Link to="/login" className="flex items-center gap-2 group">
+          <Link
+            to="/login"
+            className="flex items-center gap-2 group cursor-pointer"
+          >
             <div
               className={cn(
                 "w-10 h-10 rounded-full border flex items-center justify-center group-hover:border-primary/50 transition-colors shadow-skeuo-sm overflow-hidden",

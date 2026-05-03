@@ -25,20 +25,26 @@ async function startServer() {
     try {
       const uri = process.env.MONGODB_URI;
       if (!uri) {
-        console.warn("MONGODB_URI not found in environment. Database features will be limited.");
+        console.error("❌ ERROR: MONGODB_URI is missing from your .env file.");
         return;
       }
       await mongoose.connect(uri);
       dbConnected = true;
-      console.log("Connected to MongoDB established successfully.");
+      console.log("✅ Connected to MongoDB established successfully.");
     } catch (err) {
-      console.error("MongoDB connection error:", err);
+      console.error(
+        "❌ MongoDB connection error. Check your network or credentials:",
+        err,
+      );
     }
   };
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", database: dbConnected ? "connected" : "disconnected" });
+    res.json({
+      status: "ok",
+      database: dbConnected ? "connected" : "disconnected",
+    });
   });
 
   // TMDB Proxy (to keep key on server)
@@ -59,7 +65,7 @@ async function startServer() {
     try {
       const response = await fetch(tmdbUrl);
       const data = await response.json();
-      
+
       // 2. Cache successful responses
       if (response.ok) {
         cache.set(cacheKey, { data, timestamp: now });

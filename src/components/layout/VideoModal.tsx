@@ -24,18 +24,21 @@ export default function VideoModal({ videoKey, onClose }: VideoModalProps) {
             onClick={onClose}
             className="absolute inset-0 bg-black/90 backdrop-blur-sm"
           />
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute top-6 right-6 md:top-10 md:right-10 z-[110] p-2 text-white/50 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="w-10 h-10" />
+          </motion.button>
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden border border-white/10"
           >
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-primary transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
             <iframe
               src={`https://www.youtube.com/embed/${videoKey}?autoplay=1`}
               title="YouTube video player"

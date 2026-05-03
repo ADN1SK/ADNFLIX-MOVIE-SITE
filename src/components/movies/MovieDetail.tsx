@@ -4,22 +4,33 @@
  */
 
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Star,
   Clock,
   Calendar,
+  Check,
   Globe,
   Play,
   Plus,
   User,
+  MessageSquare,
+  Heart,
 } from "lucide-react";
 import { Movie, Cast } from "@/src/types";
 import { TMDB_CONFIG } from "@/src/constants";
-import { formatCurrency, formatDate } from "@/src/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/src/lib/utils";
 import { motion } from "motion/react";
 import MovieCard from "./MovieCard";
 import VideoModal from "../layout/VideoModal";
+import PersonModal from "./PersonModal";
+import CastOverlay from "./CastOverlay";
+import { useTheme } from "@/src/lib/ThemeContext";
 
 interface MovieVideo {
   key: string;
@@ -29,25 +40,57 @@ interface MovieVideo {
 
 export default function MovieDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const mediaType = searchParams.get("type") || "movie";
   const [movie, setMovie] = useState<Movie | null>(null);
   const [cast, setCast] = useState<Cast[]>([]);
   const [similar, setSimilar] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [isCastOverlayOpen, setIsCastOverlayOpen] = useState(false);
+  const { theme } = useTheme();
+  const navigate = useNavigate();
+
+  const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [isInFavorites, setIsInFavorites] = useState(false);
+
+  useEffect(() => {
+    const syncState = () => {
+      const watchlist = JSON.parse(
+        localStorage.getItem("adnflix_watchlist") || "[]",
+      );
+      const favorites = JSON.parse(
+        localStorage.getItem("adnflix_favorites") || "[]",
+      );
+      const movieId = movie?.id || parseInt(id || "0");
+      setIsInWatchlist(watchlist.some((m: any) => m.id === movieId));
+      setIsInFavorites(favorites.some((m: any) => m.id === movieId));
+    };
+
+    syncState();
+    window.addEventListener("storage", syncState);
+    window.addEventListener("adnflix_sync", syncState);
+
+    return () => {
+      window.removeEventListener("storage", syncState);
+      window.removeEventListener("adnflix_sync", syncState);
+    };
+  }, [id, movie?.id]);
 
   useEffect(() => {
     const fetchDetail = async () => {
       setLoading(true);
       try {
         const [movieData, castData, similarData] = await Promise.all([
-          fetch(`/api/movies/movie/${id}`).then((r) => r.json()),
-          fetch(`/api/movies/movie/${id}/credits`).then((r) => r.json()),
-          fetch(`/api/movies/movie/${id}/recommendations`).then((r) =>
+          fetch(`/api/movies/${mediaType}/${id}`).then((r) => r.json()),
+          fetch(`/api/movies/${mediaType}/${id}/credits`).then((r) => r.json()),
+          fetch(`/api/movies/${mediaType}/${id}/recommendations`).then((r) =>
             r.json(),
           ),
         ]);
         setMovie(movieData);
-        setCast(castData.cast?.slice(0, 10) || []);
+        setCast(castData.cast || []);
         // Prioritize recommendations, fallback to similar if empty
         setSimilar(
           similarData.results?.length > 0
@@ -62,12 +105,62 @@ export default function MovieDetail() {
     };
     fetchDetail();
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [id]);
+  }, [id, mediaType]);
+
+  // Track History
+  useEffect(() => {
+    if (movie) {
+      const history = JSON.parse(
+        localStorage.getItem("adnflix_history") || "[]",
+      );
+      // Remove if already exists to move it to the top (most recent)
+      const filteredHistory = history.filter(
+        (item: any) => item.id !== movie.id,
+      );
+      const newHistory = [
+        {
+          ...movie,
+          media_type: mediaType,
+          watchedAt: new Date().toISOString(),
+        },
+        ...filteredHistory,
+      ].slice(0, 50);
+      localStorage.setItem("adnflix_history", JSON.stringify(newHistory));
+      window.dispatchEvent(new Event("adnflix_sync"));
+    }
+  }, [movie, mediaType]);
+
+  const handleAddReview = () => {
+    if (!movie) return;
+    const reviewText = prompt(`Share your thoughts on ${title}:`);
+    if (!reviewText) return;
+
+    const reviews = JSON.parse(localStorage.getItem("adnflix_reviews") || "[]");
+    const newReview = {
+      id: movie.id,
+      title,
+      poster_path: movie.poster_path,
+      review: reviewText,
+      date: new Date().toISOString(),
+      media_type: mediaType,
+    };
+    localStorage.setItem(
+      "adnflix_reviews",
+      JSON.stringify([newReview, ...reviews]),
+    );
+
+    window.dispatchEvent(new Event("adnflix_sync"));
+    window.dispatchEvent(
+      new CustomEvent("adnflix_toast", {
+        detail: { message: "Review added!" },
+      }),
+    );
+  };
 
   const handleWatchTrailer = async () => {
     if (!movie) return;
     try {
-      const res = await fetch(`/api/movies/movie/${movie.id}/videos`);
+      const res = await fetch(`/api/movies/${mediaType}/${movie.id}/videos`);
       const data = await res.json();
       const trailer = data.results?.find(
         (v: MovieVideo) => v.type === "Trailer" && v.site === "YouTube",
@@ -75,11 +168,61 @@ export default function MovieDetail() {
       if (trailer) {
         setTrailerKey(trailer.key);
       } else {
-        alert("Trailer not available.");
+        window.dispatchEvent(
+          new CustomEvent("adnflix_toast", {
+            detail: { message: "Trailer not available for this title" },
+          }),
+        );
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const toggleWatchlist = () => {
+    if (!movie) return;
+    const watchlist = JSON.parse(
+      localStorage.getItem("adnflix_watchlist") || "[]",
+    );
+    const exists = watchlist.some((m: any) => m.id === movie.id);
+    const newWatchlist = exists
+      ? watchlist.filter((m: any) => m.id !== movie.id)
+      : [...watchlist, movie];
+    localStorage.setItem("adnflix_watchlist", JSON.stringify(newWatchlist));
+    window.dispatchEvent(new Event("adnflix_sync"));
+    window.dispatchEvent(
+      new CustomEvent("adnflix_toast", {
+        detail: {
+          message: exists ? "Removed from Watchlist" : "Added to Watchlist",
+          movieTitle: title,
+        },
+      }),
+    );
+  };
+
+  const toggleFavorites = () => {
+    if (!movie) return;
+    const favorites = JSON.parse(
+      localStorage.getItem("adnflix_favorites") || "[]",
+    );
+    const exists = favorites.some((m: any) => m.id === movie.id);
+    const newFavorites = exists
+      ? favorites.filter((m: any) => m.id !== movie.id)
+      : [...favorites, movie];
+    localStorage.setItem("adnflix_favorites", JSON.stringify(newFavorites));
+    window.dispatchEvent(new Event("adnflix_sync"));
+    window.dispatchEvent(
+      new CustomEvent("adnflix_toast", {
+        detail: {
+          message: exists ? "Removed from Favorites" : "Added to Favorites",
+          movieTitle: title,
+        },
+      }),
+    );
+  };
+
+  const handlePersonClick = (personId: number) => {
+    setSelectedPersonId(personId);
   };
 
   if (loading)
@@ -94,20 +237,41 @@ export default function MovieDetail() {
       <div className="pt-32 px-8 text-center">Movie not found on ADNFLIX.</div>
     );
 
+  const title = movie.title || (movie as any).name;
+  const releaseDate = movie.release_date || (movie as any).first_air_date;
+
   return (
     <div className="min-h-screen">
       <VideoModal videoKey={trailerKey} onClose={() => setTrailerKey(null)} />
+      <PersonModal
+        personId={selectedPersonId}
+        onClose={() => setSelectedPersonId(null)}
+      />
+      <CastOverlay
+        isOpen={isCastOverlayOpen}
+        movieTitle={title}
+        cast={cast}
+        onClose={() => setIsCastOverlayOpen(false)}
+        onPersonClick={(id) => {
+          setIsCastOverlayOpen(false);
+          handlePersonClick(id);
+        }}
+      />
       {/* Hero Header */}
       <div className="relative h-[60vh] md:h-[70vh] overflow-hidden">
         <div className="absolute inset-0">
           <img
             src={`${TMDB_CONFIG.IMG_BASE_URL}${TMDB_CONFIG.BACKDROP_SIZE}${movie.backdrop_path}`}
-            alt={movie.title}
+            alt={title}
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-bg-main via-bg-main/60 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-bg-main via-transparent to-transparent" />
+          {theme === "dark" && (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-t from-bg-main via-bg-main/10 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-bg-main/60 via-transparent to-transparent" />
+            </>
+          )}
         </div>
 
         <div className="relative z-10 max-w-screen-2xl mx-auto h-full flex flex-col justify-end p-4 md:p-12">
@@ -121,28 +285,35 @@ export default function MovieDetail() {
                 Powered by ADNFLIX
               </span>
               {movie.tagline && (
-                <span className="text-cream/60 italic text-sm">
+                <span className="text-text-main/60 italic text-sm">
                   "{movie.tagline}"
                 </span>
               )}
             </div>
             <h1 className="text-4xl md:text-6xl font-bold mb-6 tracking-tight">
-              {movie.title}
+              {title}
             </h1>
 
             {/* Key Metrics */}
-            <div className="flex flex-wrap items-center gap-6 text-sm text-cream/80 font-medium mb-8">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/30 text-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]">
+            <div className="flex flex-wrap items-center gap-6 text-sm text-text-main/80 font-medium mb-8">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/30 text-gold">
                 <Star className="w-4 h-4 fill-current" />
                 <span>{movie.vote_average.toFixed(1)} ADNFLIX Score</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-primary" />
-                <span>{movie.runtime} min</span>
-              </div>
+              {mediaType === "movie" ? (
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <span>{movie.runtime} min</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <span>{(movie as any).number_of_seasons} Seasons</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" />
-                <span>{formatDate(movie.release_date)}</span>
+                <span>{formatDate(releaseDate)}</span>
               </div>
               {movie.homepage && (
                 <a
@@ -175,41 +346,72 @@ export default function MovieDetail() {
                   className="w-full h-full object-cover rounded-lg"
                   referrerPolicy="no-referrer"
                 />
-
-                {/* Action Buttons Overlay */}
-                <div className="absolute inset-x-2 top-2 p-6 pb-12 bg-gradient-to-b from-bg-main/95 via-bg-main/40 to-transparent rounded-t-lg flex flex-col justify-start">
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={handleWatchTrailer}
-                      className="flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white font-bold text-xs shadow-lg shadow-primary/20 hover:scale-105 transition-all"
-                    >
-                      <Play className="w-4 h-4 fill-current" /> Trailer
-                    </button>
-                    <button
-                      onClick={() => alert("Added to your watchlist!")}
-                      className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-xs hover:bg-white/20 transition-all"
-                    >
-                      <Plus className="w-4 h-4" /> Watchlist
-                    </button>
-                  </div>
-                </div>
               </motion.div>
             </div>
           </div>
 
           {/* Right Column: Info & Cast */}
           <div className="lg:col-span-2">
-            <section className="mb-12">
-              <h2 className="text-xl font-bold mb-4 opacity-50 uppercase tracking-widest text-sm">
+            <section className="mb-8 md:mb-12">
+              <h2 className="text-xl font-bold mb-4 opacity-50 uppercase tracking-widest text-sm text-text-main">
                 Synopsis
               </h2>
-              <p className="text-lg text-cream/80 leading-relaxed first-letter:text-4xl first-letter:font-bold first-letter:text-primary first-letter:mr-1 first-letter:float-left">
+              <p className="text-base md:text-lg text-text-main/80 leading-relaxed first-letter:text-4xl first-letter:font-bold first-letter:text-primary first-letter:mr-1 first-letter:float-left">
                 {movie.overview}
               </p>
+
+              {/* Action Buttons Row */}
+              <div className="flex flex-wrap items-center gap-3 mt-8">
+                <button
+                  onClick={handleWatchTrailer}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-xs hover:scale-105 transition-all cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-current" /> Trailer
+                </button>
+                <button
+                  onClick={toggleWatchlist}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-2.5 rounded-xl border font-bold text-xs transition-all cursor-pointer",
+                    isInWatchlist
+                      ? "bg-primary border-primary text-white"
+                      : "bg-card-bg border-text-main/10 text-text-main hover:bg-primary/5",
+                  )}
+                >
+                  {isInWatchlist ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  {isInWatchlist ? "In Watchlist" : "Watchlist"}
+                </button>
+                <button
+                  onClick={handleAddReview}
+                  className="p-2.5 rounded-xl bg-card-bg border border-text-main/10 text-text-main hover:text-primary hover:border-primary/30 transition-all cursor-pointer"
+                  title="Add Review"
+                >
+                  <MessageSquare className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={toggleFavorites}
+                  className={cn(
+                    "p-2.5 rounded-xl border transition-all cursor-pointer",
+                    isInFavorites
+                      ? "bg-primary border-primary text-white"
+                      : "bg-card-bg border-text-main/10 text-text-main hover:text-primary hover:border-primary/30",
+                  )}
+                  title={
+                    isInFavorites ? "Remove from Favorites" : "Add to Favorites"
+                  }
+                >
+                  <Heart
+                    className={cn("w-5 h-5", isInFavorites && "fill-current")}
+                  />
+                </button>
+              </div>
             </section>
 
             {/* Metrics Grid */}
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 md:mb-12">
               {[
                 { label: "Budget", value: formatCurrency(movie.budget || 0) },
                 { label: "Revenue", value: formatCurrency(movie.revenue || 0) },
@@ -218,12 +420,12 @@ export default function MovieDetail() {
               ].map((item, i) => (
                 <div
                   key={i}
-                  className="skeuo-card p-4 flex flex-col items-center justify-center text-center"
+                  className="skeuo-card bg-card-bg p-4 flex flex-col items-center justify-center text-center"
                 >
-                  <span className="text-[10px] uppercase tracking-tighter text-cream/40 mb-1">
+                  <span className="text-[10px] uppercase tracking-tighter text-text-main/40 mb-1">
                     {item.label}
                   </span>
-                  <span className="text-sm font-bold text-cream/90">
+                  <span className="text-sm font-bold text-text-main/90">
                     {item.value === "$0" ? "N/A" : item.value}
                   </span>
                 </div>
@@ -231,20 +433,21 @@ export default function MovieDetail() {
             </section>
 
             {/* Cast Section */}
-            <section className="mb-12">
+            <section className="mb-8 md:mb-12">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Top Cast</h2>
-                <button
-                  onClick={() => alert("Full cast list feature coming soon!")}
-                  className="text-xs font-bold text-primary hover:underline"
+                <Link
+                  to={`/movies/${movie.id}/cast`}
+                  className="text-xs font-bold text-primary hover:underline cursor-pointer"
                 >
                   View All
-                </button>
+                </Link>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {cast.map((person) => (
-                  <div
+                {cast.slice(0, 10).map((person) => (
+                  <Link
                     key={person.id}
+                    to={`/person/${person.id}`}
                     className="flex-shrink-0 w-28 group cursor-pointer"
                   >
                     <div className="w-28 h-36 rounded-xl overflow-hidden mb-2 skeuo-card border-none shadow-sm group-hover:shadow-skeuo-md transition-all">
@@ -262,10 +465,10 @@ export default function MovieDetail() {
                       )}
                     </div>
                     <p className="text-xs font-bold truncate">{person.name}</p>
-                    <p className="text-[10px] text-cream/40 truncate">
+                    <p className="text-[10px] text-text-main/40 truncate">
                       {person.character}
                     </p>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </section>
