@@ -39,25 +39,41 @@ async function startServer() {
     }
   };
 
-  // API Proxy to standalone backend (port 5000)
-  app.all("/api/*", async (req, res) => {
-    const backendUrl = `http://localhost:5000${req.url}`;
-    
-    try {
-      const response = await fetch(backendUrl, {
-        method: req.method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(req.headers.authorization ? { "Authorization": req.headers.authorization } : {}),
-        },
-        body: ["POST", "PUT", "PATCH"].includes(req.method) ? JSON.stringify(req.body) : undefined,
-      });
+  // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({
+      status: "ok",
+      database: dbConnected ? "connected" : "disconnected",
+    });
+  });
 
+  // TMDB Proxy (to keep key on server)
+  app.get("/api/movies/*", async (req, res) => {
+    const cacheKey = req.url;
+    const now = Date.now();
+
+    // 1. Check if we have a valid cached response
+    if (cache.has(cacheKey)) {
+      const cached = cache.get(cacheKey)!;
+      if (now - cached.timestamp < CACHE_TTL) {
+        return res.json(cached.data);
+      }
+      cache.delete(cacheKey); // Remove expired entry
+    }
+
+    const tmdbUrl = `https://api.themoviedb.org/3${req.url.replace("/api/movies", "")}${req.url.includes("?") ? "&" : "?"}api_key=${process.env.TMDB_API_KEY || "d24d707ba3fb208316f0a0ec7589a90f"}`;
+    try {
+      const response = await fetch(tmdbUrl);
       const data = await response.json();
-      res.status(response.status).json(data);
-    } catch (error) {
-      console.error("Backend proxy error:", error);
-      res.status(500).json({ error: "Failed to connect to backend", details: (error as Error).message });
+
+      // 2. Cache successful responses
+      if (response.ok) {
+        cache.set(cacheKey, { data, timestamp: now });
+      }
+
+      res.json(data);
+    } catch {
+      res.status(500).json({ error: "Failed to fetch from TMDB" });
     }
   });
 

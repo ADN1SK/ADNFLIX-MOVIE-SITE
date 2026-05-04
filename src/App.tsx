@@ -32,6 +32,7 @@ import GenrePage from "./components/movies/GenrePage";
 import PersonPage from "./components/movies/PersonPage";
 import CastPage from "./components/movies/CastPage";
 import SearchPage from "./components/movies/SearchPage";
+import LoginPage from "./components/auth/LoginPage";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { TMDB_CONFIG } from "./constants";
 import { useTheme } from "./lib/ThemeContext";
@@ -696,14 +697,7 @@ export default function App() {
             />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route
-              path="/login"
-              element={
-                <div className="pt-32 px-8 text-center text-text-main/40 uppercase tracking-widest font-bold">
-                  ADNFLIX Auth Entry
-                </div>
-              }
-            />
+            <Route path="/login" element={<LoginPage />} />
             <Route
               path="/about"
               element={

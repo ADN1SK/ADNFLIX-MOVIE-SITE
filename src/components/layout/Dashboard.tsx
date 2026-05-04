@@ -115,21 +115,30 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:min-w-80">
-              {accountStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-xl border border-text-main/10 bg-bg-main/60 p-4 text-center"
+              <div className="flex flex-col gap-3 md:items-end">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 cursor-pointer"
                 >
-                  <div className="text-2xl font-bold text-primary">
-                    {stat.value}
-                  </div>
-                  <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-text-main/35">
-                    {stat.label}
-                  </div>
+                  <LogIn className="h-3 w-3" />
+                  Sign In
+                </Link>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:min-w-80">
+                  {accountStats.map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-xl border border-text-main/10 bg-bg-main/60 p-4 text-center"
+                    >
+                      <div className="text-2xl font-bold text-primary">
+                        {stat.value}
+                      </div>
+                      <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-text-main/35">
+                        {stat.label}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
           </div>
         </header>
 
