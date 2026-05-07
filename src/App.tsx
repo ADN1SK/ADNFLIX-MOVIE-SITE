@@ -47,6 +47,16 @@ const GENRES = [
   { id: 53, name: "Thriller" },
 ];
 
+const LANGUAGES = [
+  { code: "en", name: "English" },
+  { code: "ko", name: "Korean" },
+  { code: "ja", name: "Japanese" },
+  { code: "hi", name: "Hindi" },
+  { code: "es", name: "Spanish" },
+  { code: "fr", name: "French" },
+  { code: "zh", name: "Chinese" },
+];
+
 const MOVIE_FEEDS = {
   trending: {
     title: "Trending",
@@ -65,6 +75,12 @@ const MOVIE_FEEDS = {
     subtitle: "The most popular animation hits on ADNFLIX",
     movieEndpoint: "discover/movie?with_genres=16",
     tvEndpoint: "discover/tv?with_genres=16",
+  },
+  korean: {
+    title: "K-Drama & Cinema",
+    subtitle: "Experience the wave of Korean storytelling",
+    movieEndpoint: "discover/movie?with_original_language=ko",
+    tvEndpoint: "discover/tv?with_original_language=ko",
   },
 };
 
@@ -93,6 +109,9 @@ function Home() {
   const [popular, setPopular] = useState<Movie[]>([]);
   const [discover, setDiscover] = useState<Movie[]>([]);
   const [popularAnime, setPopularAnime] = useState<Movie[]>([]); // New state for popular anime
+  const [popularKoreans, setPopularKoreans] = useState<Movie[]>([]); // New state for popular koreans
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoverGenre, setDiscoverGenre] = useState(GENRES[0]);
   const [loading, setLoading] = useState(true);
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -110,29 +129,77 @@ function Home() {
     }
   };
 
-  // Randomly select a genre for ADNFLIX Intelligence
-  const randomGenre = GENRES[Math.floor(Math.random() * GENRES.length)];
-  const discoverEndpoint = `discover/movie?with_genres=${randomGenre.id}&sort_by=vote_average.desc&vote_count.gte=1000`;
+  const refreshDiscoverGems = useCallback(async (isInitial = false) => {
+    if (!isInitial) setIsDiscovering(true);
+    try {
+      const watchlist = JSON.parse(
+        localStorage.getItem("adnflix_watchlist") || "[]",
+      );
+      const favorites = JSON.parse(
+        localStorage.getItem("adnflix_favorites") || "[]",
+      );
+      const allSaved = [...watchlist, ...favorites];
+
+      let targetGenre = GENRES[Math.floor(Math.random() * GENRES.length)];
+
+      if (allSaved.length > 0) {
+        const genreCounts: Record<number, number> = {};
+        allSaved.forEach((m: any) => {
+          if (m.genre_ids) {
+            m.genre_ids.forEach((id: number) => {
+              genreCounts[id] = (genreCounts[id] || 0) + 1;
+            });
+          }
+        });
+
+        const topGenre = GENRES.map((g) => ({
+          ...g,
+          count: genreCounts[g.id] || 0,
+        })).sort((a, b) => b.count - a.count)[0];
+
+        if (topGenre.count > 0) targetGenre = topGenre;
+      }
+
+      setDiscoverGenre(targetGenre);
+      // "Hidden Gems" Logic: High rating (>= 7), but lower vote counts (500-3000)
+      // to avoid just showing the most famous blockbusters.
+      const endpoint = `discover/movie?with_genres=${targetGenre.id}&sort_by=vote_average.desc&vote_count.gte=500&vote_count.lte=3500`;
+      const data = await fetchMovies(endpoint);
+      setDiscover(data.results?.slice(0, 4) || []);
+    } catch (err) {
+      console.error("Intelligence Scan Failed:", err);
+    } finally {
+      if (!isInitial) {
+        // Artificial delay for the "processing" feel
+        setTimeout(() => setIsDiscovering(false), 1500);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Initial DNA scan
+        refreshDiscoverGems(true);
+
         const [
           trendingMovies,
           trendingTV,
           popularMoviesData,
           popularTVData,
-          discoverData,
           popularAnimeMoviesData, // Fetch popular anime movies
           popularAnimeTVData, // Fetch popular anime TV series
+          popularKoreanMoviesData, // Fetch popular korean movies
+          popularKoreanTVData, // Fetch popular korean TV series
         ] = await Promise.all([
           fetchMovies("trending/movie/week"),
           fetchMovies("trending/tv/week"),
           fetchMovies("movie/top_rated"),
           fetchMovies("tv/top_rated"),
-          fetchMovies(discoverEndpoint), // Use the dynamically generated endpoint
           fetchMovies(MOVIE_FEEDS.anime.movieEndpoint), // Use anime movie endpoint
           fetchMovies(MOVIE_FEEDS.anime.tvEndpoint), // Use anime TV endpoint
+          fetchMovies(MOVIE_FEEDS.korean.movieEndpoint), // Use korean movie endpoint
+          fetchMovies(MOVIE_FEEDS.korean.tvEndpoint), // Use korean TV endpoint
         ]);
 
         const allTrending = [
@@ -169,10 +236,22 @@ function Home() {
           })),
         ].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
 
+        // Combine and sort popular korean movies and TV series
+        const combinedPopularKorean = [
+          ...(popularKoreanMoviesData.results || []).map((m: any) => ({
+            ...m,
+            media_type: "movie",
+          })),
+          ...(popularKoreanTVData.results || []).map((m: any) => ({
+            ...m,
+            media_type: "tv",
+          })),
+        ].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
         setTrending(allTrending);
         setPopular(combinedPopular);
-        setDiscover(discoverData.results || []);
         setPopularAnime(combinedPopularAnime); // Set the popular anime data
+        setPopularKoreans(combinedPopularKorean); // Set the popular korean data
       } catch (err) {
         console.error(err);
       } finally {
@@ -196,7 +275,7 @@ function Home() {
 
   return (
     <div className="min-h-screen pb-20 overflow-x-hidden">
-      {trending.length > 0 && <Hero movies={trending.slice(0, 5)} />}
+      {trending.length > 0 && <Hero movies={trending.slice(0, 10)} />}
 
       <main className="max-w-screen-2xl mx-auto px-4 md:px-8 mt-6 md:mt-12 relative z-20">
         {/* Trending Section */}
@@ -297,21 +376,34 @@ function Home() {
                 <h2 className="text-4xl md:text-5xl font-bold mb-4 tracking-tighter uppercase">
                   ADNFLIX Intelligence
                 </h2>
-                <p className="text-cream/50 max-w-2xl mx-auto mb-10 text-lg">
-                  Our discovery engine analyzes global cinematic trends to
-                  provide you with hidden gems you won't find anywhere else.
-                  Ready to expand your film DNA?
+                <p className="text-text-main/50 max-w-2xl mx-auto mb-10 text-lg h-20 flex items-center justify-center">
+                  {isDiscovering
+                    ? "Analyzing neural pathways and cinematic sequences..."
+                    : `Discovery engine complete. We've identified hidden ${discoverGenre.name} gems tailored to your unique film DNA.`}
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto relative">
+                  <AnimatePresence>
+                    {isDiscovering && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-30 flex items-center justify-center bg-bg-main/60 backdrop-blur-md rounded-xl border border-primary/20"
+                      >
+                        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin shadow-[0_0_20px_rgba(229,9,20,0.3)]" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   {discover.slice(0, 4).map((movie) => (
                     <MovieCard key={movie.id} movie={movie} />
                   ))}
                 </div>
                 <button
-                  onClick={() => navigate("/search")}
-                  className="mt-12 px-10 py-4 rounded-full bg-primary text-white font-bold uppercase tracking-[0.2em] shadow-lg shadow-primary/20 hover:scale-105 transition-all text-xs cursor-pointer"
+                  onClick={() => refreshDiscoverGems()}
+                  disabled={isDiscovering}
+                  className="mt-12 px-10 py-4 rounded-full bg-primary text-white font-bold uppercase tracking-[0.2em] shadow-lg shadow-primary/20 hover:scale-105 transition-all text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Deep Scan Database
+                  {isDiscovering ? "Neural Scanning..." : "Re-Scan Film DNA"}
                 </button>
               </div>
             </div>
@@ -359,6 +451,29 @@ function Home() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
             {popularAnime.slice(0, 18).map((movie) => (
+              <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
+        </section>
+
+        {/* Popular Korean Section - NEW */}
+        <section className="mb-12 md:mb-24">
+          <div className="flex items-center justify-between mb-6 md:mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(229,9,20,0.5)]" />
+              <h2 className="text-3xl font-bold tracking-tight uppercase leading-none">
+                K-Drama & Cinema
+              </h2>
+            </div>
+            <RouterLink
+              to="/popular-korean"
+              className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] hover:underline flex items-center gap-2 bg-primary/5 px-6 py-3 rounded-full border border-primary/20 shadow-skeuo-sm transition-all hover:shadow-skeuo-md active:translate-y-0.5 cursor-pointer"
+            >
+              Explore More
+            </RouterLink>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {popularKoreans.slice(0, 18).map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
           </div>
@@ -597,12 +712,13 @@ function GenresPage() {
     (currentYear - index).toString(),
   );
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   const goToGenre = () => {
     const genre = GENRES.find((item) => item.id.toString() === selectedGenre);
     if (!genre) return;
     navigate(
-      `/genre/${genre.id}?name=${encodeURIComponent(genre.name)}&year=${selectedYear}`,
+      `/genre/${genre.id}?name=${encodeURIComponent(genre.name)}&year=${selectedYear}&lang=${selectedLanguage}`,
     );
   };
 
@@ -641,6 +757,17 @@ function GenresPage() {
             {years.map((year) => (
               <option key={year} value={year}>
                 {year}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedLanguage}
+            onChange={(event) => setSelectedLanguage(event.target.value)}
+            className="w-full md:max-w-40 rounded-xl bg-bg-main border border-text-main/10 px-4 py-3 text-sm font-bold text-text-main outline-none focus:border-primary/50"
+          >
+            {LANGUAGES.map((lang) => (
+              <option key={lang.code} value={lang.code}>
+                {lang.name}
               </option>
             ))}
           </select>
@@ -694,6 +821,10 @@ export default function App() {
             <Route
               path="/popular-anime"
               element={<MovieFeedPage feed="anime" />}
+            />
+            <Route
+              path="/popular-korean"
+              element={<MovieFeedPage feed="korean" />}
             />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/dashboard" element={<Dashboard />} />

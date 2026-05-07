@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Tv,
+  TrendingUp,
 } from "lucide-react";
 import { Movie } from "@/src/types";
 import { TMDB_CONFIG } from "@/src/constants";
@@ -162,6 +163,16 @@ export default function Hero({ movies }: HeroProps) {
               >
                 {/* Badge */}
                 <div className="flex items-center gap-2 mb-6">
+                  {activeIndex < 3 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="px-2 py-0.5 rounded bg-gold text-black text-[10px] font-black tracking-widest uppercase flex items-center gap-1 shadow-[0_0_20px_rgba(212,175,55,0.4)]"
+                    >
+                      <TrendingUp className="w-3 h-3" />
+                      Most Popular #{activeIndex + 1}
+                    </motion.div>
+                  )}
                   <div className="px-2 py-0.5 rounded bg-primary/20 border border-primary/40 text-primary text-[10px] font-bold tracking-widest uppercase">
                     ADNFLIX Spotlight
                   </div>
