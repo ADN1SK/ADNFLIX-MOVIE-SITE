@@ -10,12 +10,10 @@ import {
   Lock, 
   Eye, 
   EyeOff, 
-  Chrome, 
   ArrowRight, 
   Loader2, 
   ShieldCheck,
-  ChevronLeft,
-  Github
+  ChevronLeft
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
@@ -49,19 +47,6 @@ export default function LoginPage() {
         setIsLoading(false);
       }
     }, 1500);
-  };
-
-  const handleGoogleLogin = () => {
-    setIsLoading(true);
-    // Mock Google login
-    setTimeout(() => {
-      localStorage.setItem("adnflix_auth_token", "mock_google_jwt_token");
-      
-      window.dispatchEvent(new CustomEvent("adnflix_toast", { 
-        detail: { message: "Google Authentication Successful" } 
-      }));
-      navigate("/dashboard");
-    }, 1000);
   };
 
   const handleForgotPassword = (e: React.MouseEvent) => {
@@ -104,37 +89,6 @@ export default function LoginPage() {
               <p className="text-text-main/40 text-xs font-bold uppercase tracking-widest">
                 Access your <span className="text-primary italic">ADNFLIX</span> DNA
               </p>
-            </div>
-
-            {/* Social Logins */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-                className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-bg-main border border-text-main/10 hover:border-primary/40 hover:shadow-skeuo-sm transition-all group active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Chrome className="w-4 h-4 text-text-main/60 group-hover:text-primary transition-colors" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Google</span>
-              </button>
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-                className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-bg-main border border-text-main/10 hover:border-primary/40 hover:shadow-skeuo-sm transition-all group active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Github className="w-4 h-4 text-text-main/60 group-hover:text-primary transition-colors" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Github</span>
-              </button>
-            </div>
-
-            <div className="relative mb-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-text-main/5"></div>
-              </div>
-              <div className="relative flex justify-center text-center">
-                <span className="bg-transparent px-4 text-[10px] font-bold uppercase tracking-[0.3em] text-text-main/20">
-                  Or use security code
-                </span>
-              </div>
             </div>
 
             {/* Email/Password Form */}
@@ -253,3 +207,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
