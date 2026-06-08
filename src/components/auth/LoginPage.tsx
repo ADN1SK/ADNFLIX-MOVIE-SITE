@@ -46,19 +46,30 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    // Mock login delay
-    setTimeout(() => {
-      if (email === "test@example.com" && password === "password") {
-        localStorage.setItem("adnflix_auth_token", "mock_jwt_token_12345");
-        window.dispatchEvent(new CustomEvent("adnflix_toast", { 
-          detail: { message: "Authentication Successful", movieTitle: "Welcome Back" } 
-        }));
-        navigate("/dashboard");
-      } else {
-        setError("Invalid credentials. Use test@example.com / password");
-        setIsLoading(false);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
       }
-    }, 1500);
+
+      localStorage.setItem("adnflix_auth_token", data.token);
+      window.dispatchEvent(new CustomEvent("adnflix_toast", { 
+        detail: { message: "Authentication Successful", movieTitle: "Welcome Back" } 
+      }));
+      navigate("/dashboard");
+    } catch (err: any) {
+      setError(err.message);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -201,7 +212,7 @@ export default function LoginPage() {
 
               <div className="mt-10 text-center" style={{ transform: "translateZ(20px)" }}>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-main/20">
-                  New Unit? <a href="#" className="text-primary hover:text-primary/80 transition-colors">Register Neural Path</a>
+                  New Unit? <Link to="/signup" className="text-primary hover:text-primary/80 transition-colors">Register Neural Path</Link>
                 </p>
               </div>
             </div>

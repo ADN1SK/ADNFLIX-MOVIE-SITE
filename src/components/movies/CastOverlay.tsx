@@ -42,7 +42,7 @@ export default function CastOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[110] bg-bg-main flex flex-col overflow-hidden"
+          className="fixed inset-0 z-[190] bg-bg-main flex flex-col overflow-hidden"
         >
           <header className="px-6 py-8 md:px-12 flex items-center justify-between border-b border-white/5 bg-card-bg/50 backdrop-blur-xl">
             <div>

@@ -14,6 +14,8 @@ import {
 import { cn } from "./lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import Navbar from "./components/layout/Navbar";
+import Footer from "./components/layout/Footer";
+import Sidebar from "./components/layout/Sidebar";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Movie } from "./types";
 import Hero from "./components/movies/Hero";
@@ -25,6 +27,12 @@ import {
   Globe,
   Sparkles,
   ArrowUp,
+  Mail,
+  Twitter,
+  Instagram,
+  Youtube,
+  Github,
+  ArrowRight
 } from "lucide-react";
 import MovieDetail from "./components/movies/MovieDetail";
 import Dashboard from "./components/layout/Dashboard";
@@ -33,6 +41,7 @@ import PersonPage from "./components/movies/PersonPage";
 import CastPage from "./components/movies/CastPage";
 import SearchPage from "./components/movies/SearchPage";
 import LoginPage from "./components/auth/LoginPage";
+import SignupPage from "./components/auth/SignupPage";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { TMDB_CONFIG } from "./constants";
 import { useTheme } from "./lib/ThemeContext";
@@ -288,19 +297,27 @@ function Home() {
                 <span className="text-primary italic">ADNFLIX</span>
               </h2>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => scroll("left")}
-                className="p-2.5 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
+            <div className="flex items-center gap-2 md:gap-4">
+              <RouterLink
+                to="/trending"
+                className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] hover:underline flex items-center gap-2 bg-primary/5 px-3 py-2 md:px-6 md:py-3 rounded-full border border-primary/20 shadow-skeuo-sm transition-all hover:shadow-skeuo-md active:translate-y-0.5 cursor-pointer whitespace-nowrap"
               >
-                <ChevronLeft className="w-5 h-5 text-text-main/40 group-hover:text-primary" />
-              </button>
-              <button
-                onClick={() => scroll("right")}
-                className="p-2.5 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
-              >
-                <ChevronRight className="w-5 h-5 text-text-main/40 group-hover:text-primary" />
-              </button>
+                Explore More
+              </RouterLink>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => scroll("left")}
+                  className="p-2.5 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5 text-text-main/40 group-hover:text-primary" />
+                </button>
+                <button
+                  onClick={() => scroll("right")}
+                  className="p-2.5 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5 text-text-main/40 group-hover:text-primary" />
+                </button>
+              </div>
             </div>
           </div>
           <div
@@ -494,15 +511,6 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
   const [sortBy, setSortBy] = useState<"popularity" | "rating" | "date">(
     "popularity",
   );
-  const [showBackToTop, setShowBackToTop] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowBackToTop(window.scrollY > 400);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const observer = useRef<IntersectionObserver | null>(null);
   const lastMovieElementRef = useCallback(
@@ -567,7 +575,8 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
         } else {
           setMovies((prev) => {
             const combined = page === 1 ? newItems : [...prev, ...newItems];
-            return combined.sort((a, b) => {
+            // Sort the combined results
+            return [...combined].sort((a, b) => {
               if (sortBy === "popularity") {
                 return (b.popularity || 0) - (a.popularity || 0);
               }
@@ -576,10 +585,10 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
               }
               if (sortBy === "date") {
                 const dateA = new Date(
-                  a.release_date || (a as any).first_air_date || 0,
+                  a.release_date || (a as any).first_air_date || "1900-01-01",
                 ).getTime();
                 const dateB = new Date(
-                  b.release_date || (b as any).first_air_date || 0,
+                  b.release_date || (b as any).first_air_date || "1900-01-01",
                 ).getTime();
                 return dateB - dateA;
               }
@@ -596,7 +605,7 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
     };
 
     loadMovies();
-  }, [page, feed, filter, feedConfig]);
+  }, [page, feed, filter, feedConfig, sortBy]);
 
   if (loading && page === 1) {
     return (
@@ -651,7 +660,7 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
               className="w-full bg-card-bg border border-text-main/10 rounded-xl px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-text-main/60 outline-none focus:border-primary/50 transition-all cursor-pointer appearance-none"
             >
               <option value="popularity">Sort by: Popularity</option>
-              <option value="rating">Sort by: ADNFLIX Score</option>
+              <option value="rating">Sort by: IMDb Score</option>
               <option value="date">Sort by: Release Date</option>
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -685,21 +694,6 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
           </p>
         )}
       </div>
-
-      <AnimatePresence>
-        {showBackToTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="fixed bottom-8 right-8 z-50 p-4 rounded-full bg-primary text-white shadow-lg shadow-primary/40 hover:scale-110 active:scale-95 transition-transform cursor-pointer group"
-            title="Back to Top"
-          >
-            <ArrowUp className="w-6 h-6 group-hover:-translate-y-0.5 transition-transform" />
-          </motion.button>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -784,10 +778,20 @@ function GenresPage() {
 }
 
 export default function App() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     movieTitle?: string;
   } | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     const handleToast = (e: any) => {
@@ -800,142 +804,181 @@ export default function App() {
       window.removeEventListener("adnflix_toast" as any, handleToast);
   }, []);
 
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
   return (
     <ThemeProvider>
       <Router>
         <div className="bg-bg-main min-h-screen text-text-main selection:bg-primary/30 selection:text-white transition-colors duration-500 ease-in-out">
           <ScrollToTop />
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/movies/:id/cast" element={<CastPage />} />
-            <Route path="/movies/:id" element={<MovieDetail />} />
-            <Route path="/person/:id" element={<PersonPage />} />
-            <Route path="/genre/:id" element={<GenrePage />} />
-            <Route path="/genres" element={<GenresPage />} />
-            <Route
-              path="/trending"
-              element={<MovieFeedPage feed="trending" />}
-            />
-            <Route path="/popular" element={<MovieFeedPage feed="popular" />} />
-            <Route
-              path="/popular-anime"
-              element={<MovieFeedPage feed="anime" />}
-            />
-            <Route
-              path="/popular-korean"
-              element={<MovieFeedPage feed="korean" />}
-            />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              path="/about"
-              element={
-                <div className="pt-32 px-8 text-center text-text-main/40 uppercase tracking-widest font-bold">
-                  About ADNFLIX
-                </div>
-              }
-            />
-            <Route
-              path="/contact"
-              element={
-                <div className="pt-32 px-8 text-center text-text-main/40 uppercase tracking-widest font-bold">
-                  Contact ADNFLIX
-                </div>
-              }
-            />
-          </Routes>
+          
+          <Navbar onToggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} />
 
-          <AnimatePresence>
-            {toast && (
-              <motion.div
-                initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl bg-card-bg/95 backdrop-blur-xl border border-primary/20 shadow-skeuo-lg flex items-center gap-3 whitespace-nowrap pointer-events-none"
-              >
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <p className="text-sm font-bold tracking-tight">
-                  <span className="text-text-main/60 mr-1">
-                    {toast.message}
-                  </span>
-                  {toast.movieTitle && (
-                    <span className="text-primary italic truncate max-w-[180px] inline-block align-bottom">
-                      {toast.movieTitle}
-                    </span>
-                  )}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="flex">
+            <Sidebar 
+              isOpen={isSidebarOpen} 
+              onClose={() => setIsSidebarOpen(false)} 
+            />
 
-          {/* Footer */}
-          <footer className="border-t border-white/5 bg-card-bg/30 py-20 px-8">
-            <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-16">
-              <div className="flex flex-col gap-4 items-center md:items-start text-center md:text-left">
-                <RouterLink
-                  to="/"
-                  className="text-3xl font-bold tracking-tighter"
+            <motion.div 
+              animate={{ 
+                marginLeft: isSidebarOpen ? 320 : 0,
+                width: isSidebarOpen ? "calc(100% - 320px)" : "100%"
+              }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="flex-1 min-h-screen flex flex-col relative"
+            >
+              <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/movies/:id/cast" element={<CastPage />} />
+                <Route path="/movies/:id" element={<MovieDetail />} />
+                <Route path="/person/:id" element={<PersonPage />} />
+                <Route path="/genre/:id" element={<GenrePage />} />
+                <Route path="/genres" element={<GenresPage />} />
+                <Route
+                  path="/trending"
+                  element={<MovieFeedPage feed="trending" />}
+                />
+                <Route path="/popular" element={<MovieFeedPage feed="popular" />} />
+                <Route
+                  path="/popular-anime"
+                  element={<MovieFeedPage feed="anime" />}
+                />
+                <Route
+                  path="/popular-korean"
+                  element={<MovieFeedPage feed="korean" />}
+                />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+
+                <Route
+                  path="/about"
+                  element={
+                    <div className="pt-32 pb-20 px-8 max-w-4xl mx-auto">
+                      <h1 className="text-4xl font-bold mb-8 font-serif">About <span className="text-primary italic">ADNFLIX</span></h1>
+                      <div className="space-y-6 text-text-main/70 leading-relaxed text-lg">
+                        <p>
+                          ADNFLIX is a cutting-edge movie discovery platform designed for the cinematic individual. 
+                          Our mission is to decode the vast landscape of global film and deliver precision 
+                          recommendations that resonate with your unique "Cinematic DNA."
+                        </p>
+                        <p>
+                          Built with the modern viewer in mind, we leverage high-performance technology 
+                          and the extensive TMDB database to provide a seamless, high-fidelity browsing 
+                          experience. Whether you're looking for global blockbusters or hidden indie gems, 
+                          ADNFLIX is your primary source for high-resolution storytelling.
+                        </p>
+                        <div className="pt-8 border-t border-white/5">
+                          <p className="text-sm font-mono uppercase tracking-widest text-text-main/40">
+                            Powered by ADN1SK Studios • Est. 2024
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
+                <Route
+                  path="/terms"
+                  element={
+                    <div className="pt-32 pb-20 px-8 max-w-4xl mx-auto">
+                      <h1 className="text-4xl font-bold mb-8 font-serif">Terms & <span className="text-primary italic">Conditions</span></h1>
+                      <div className="space-y-8 text-text-main/70 leading-relaxed">
+                        <section>
+                          <h2 className="text-xl font-bold text-text-main mb-4 uppercase tracking-wider">1. Acceptance of Terms</h2>
+                          <p>By accessing ADNFLIX, you agree to be bound by these Terms and Conditions. Our platform is provided "as is" for personal, non-commercial entertainment purposes.</p>
+                        </section>
+                        <section>
+                          <h2 className="text-xl font-bold text-text-main mb-4 uppercase tracking-wider">2. Content & Metadata</h2>
+                          <p>All movie metadata, images, and trailers are provided via the TMDB API. ADNFLIX does not claim ownership of the cinematic content displayed, which remains the property of their respective copyright holders.</p>
+                        </section>
+                        <section>
+                          <h2 className="text-xl font-bold text-text-main mb-4 uppercase tracking-wider">3. User Conduct</h2>
+                          <p>Users are expected to use the platform responsibly. Any attempt to scrape data, disrupt service, or reverse engineer the ADNFLIX core engine is strictly prohibited.</p>
+                        </section>
+                      </div>
+                    </div>
+                  }
+                />
+                <Route
+                  path="/privacy"
+                  element={
+                    <div className="pt-32 pb-20 px-8 max-w-4xl mx-auto">
+                      <h1 className="text-4xl font-bold mb-8 font-serif">Privacy <span className="text-primary italic">Policy</span></h1>
+                      <div className="space-y-8 text-text-main/70 leading-relaxed">
+                        <section>
+                          <h2 className="text-xl font-bold text-text-main mb-4 uppercase tracking-wider">Data Encryption</h2>
+                          <p>Your privacy is hardcoded into our DNA. ADNFLIX uses localized storage (LocalStorage) to keep your Watchlist and Favorites strictly on your own device.</p>
+                        </section>
+                        <section>
+                          <h2 className="text-xl font-bold text-text-main mb-4 uppercase tracking-wider">No Third-Party Tracking</h2>
+                          <p>We do not sell, trade, or transfer your personal information to outside parties. Your cinematic preferences are your own business.</p>
+                        </section>
+                        <section>
+                          <h2 className="text-xl font-bold text-text-main mb-4 uppercase tracking-wider">Security</h2>
+                          <p>We implement a variety of security measures to maintain the safety of your personal experience when you enter, submit, or access the ADNFLIX dashboard.</p>
+                        </section>
+                      </div>
+                    </div>
+                  }
+                />
+                <Route
+                  path="/contact"
+                  element={
+                    <div className="pt-32 px-8 text-center text-text-main/40 uppercase tracking-widest font-bold">
+                      Contact ADNFLIX
+                    </div>
+                  }
+                />
+              </Routes>
+            </main>
+
+            <AnimatePresence>
+              {toast && (
+                <motion.div
+                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                  className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[300] px-6 py-3 rounded-2xl bg-card-bg/95 backdrop-blur-xl border border-primary/20 shadow-skeuo-lg flex items-center gap-3 whitespace-nowrap pointer-events-none"
                 >
-                  ADN<span className="text-primary italic">FLIX</span>
-                </RouterLink>
-                <p className="text-text-main/20 text-[10px] uppercase tracking-[0.2em] font-bold leading-relaxed max-w-xs">
-                  Your DNA in Film. Precision delivery for the cinematic
-                  individual. Unveiling the code behind every masterpiece.
-                </p>
-              </div>
-              <div className="flex flex-col items-center md:items-end gap-8">
-                <div className="flex flex-wrap justify-center gap-10 text-[10px] font-bold uppercase tracking-[0.2em] text-text-main/40">
-                  <RouterLink
-                    to="/about"
-                    className="hover:text-primary transition-all"
-                  >
-                    About Us
-                  </RouterLink>
-                  <RouterLink
-                    to="/genre/28"
-                    className="hover:text-primary transition-all"
-                  >
-                    Action
-                  </RouterLink>
-                  <RouterLink
-                    to="/genre/878"
-                    className="hover:text-primary transition-all"
-                  >
-                    Sci-Fi
-                  </RouterLink>
-                  <RouterLink
-                    to="/contact"
-                    className="hover:text-primary transition-all"
-                  >
-                    Inquiries
-                  </RouterLink>
-                  <a href="#" className="hover:text-primary transition-all">
-                    Watchlist
-                  </a>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="flex gap-4 text-text-main/20">
-                    <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center hover:border-primary/50 cursor-pointer transition-colors">
-                      🧬
-                    </div>
-                    <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center hover:border-primary/50 cursor-pointer transition-colors">
-                      🎬
-                    </div>
-                    <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center hover:border-primary/50 cursor-pointer transition-colors">
-                      🎥
-                    </div>
-                  </div>
-                  <p className="text-text-main/10 text-[10px] font-mono tracking-widest">
-                    © 2024 ADNFLIX STUDIOS. VER 2.0.4
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <p className="text-sm font-bold tracking-tight">
+                    <span className="text-text-main/60 mr-1">
+                      {toast.message}
+                    </span>
+                    {toast.movieTitle && (
+                      <span className="text-primary italic truncate max-w-[180px] inline-block align-bottom">
+                        {toast.movieTitle}
+                      </span>
+                    )}
                   </p>
-                </div>
-              </div>
-            </div>
-          </footer>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Footer */}
+            <Footer />
+          </motion.div>
         </div>
-      </Router>
-    </ThemeProvider>
+
+        <AnimatePresence>
+          {showBackToTop && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 p-4 rounded-full bg-card-bg/80 backdrop-blur-md border border-white/10 text-primary shadow-skeuo-lg hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer group"
+              title="Back to Top"
+            >
+              <ArrowUp className="w-6 h-6 group-hover:-translate-y-1 transition-transform" />
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+    </Router>
+  </ThemeProvider>
   );
 }

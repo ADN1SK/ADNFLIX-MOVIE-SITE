@@ -26,7 +26,13 @@ import { Movie } from "@/src/types";
 
 import { useTheme } from "@/src/lib/ThemeContext";
 
-export default function Navbar() {
+export default function Navbar({ 
+  onToggleSidebar, 
+  isSidebarOpen 
+}: { 
+  onToggleSidebar: () => void;
+  isSidebarOpen: boolean;
+}) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -34,7 +40,6 @@ export default function Navbar() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDashboardMenuOpen, setIsDashboardMenuOpen] = useState(false);
   const navigate = useNavigate();
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const location = useLocation();
@@ -70,14 +75,7 @@ export default function Navbar() {
   };
 
   const isDashboard = location.pathname === "/dashboard";
-  const dashboardMenuItems = [
-    { label: "Home", path: "/", icon: Home },
-    { label: "Trending", path: "/trending", icon: TrendingUp },
-    { label: "Popular", path: "/popular", icon: Flame },
-    { label: "Genres", path: "/genres", icon: Tags },
-    { label: "My Account", path: "/dashboard", icon: User },
-    { label: "Sign In", path: "/login", icon: LogIn },
-  ];
+  
   const isEditableTarget = (target: EventTarget | null) =>
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
@@ -185,65 +183,30 @@ export default function Navbar() {
   return (
     <nav
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out h-20 flex items-center px-4 md:px-8",
+        "fixed top-0 left-0 right-0 z-[120] transition-all duration-500 ease-in-out h-20 flex items-center px-4 md:px-8",
         isScrolled ? "glass-nav shadow-lg" : "bg-transparent",
       )}
     >
       <div className="max-w-screen-2xl mx-auto w-full flex items-center gap-4 md:gap-5">
-        {/* Dashboard Menu */}
-        <div className="relative hidden lg:block w-10 h-10 shrink-0">
+        {/* Sidebar Toggle */}
+        <div className="flex items-center">
           <button
             type="button"
-            onClick={() => setIsDashboardMenuOpen((isOpen) => !isOpen)}
+            onClick={onToggleSidebar}
             className={cn(
               "flex items-center justify-center w-10 h-10 rounded-lg transition-all shadow-skeuo-sm border",
-              isDashboard || isDashboardMenuOpen
-                ? "bg-primary/10 border-primary/30 shadow-skeuo-md cursor-default"
+              isSidebarOpen
+                ? "bg-primary/10 border-primary/30 shadow-skeuo-md cursor-pointer"
                 : "bg-card-bg border-text-main/5 hover:border-primary/30 hover:shadow-skeuo-md cursor-pointer",
             )}
           >
             <LayoutDashboard
               className={cn(
                 "w-5 h-5 transition-colors",
-                isDashboard || isDashboardMenuOpen
-                  ? "text-primary"
-                  : "text-text-main/40",
+                isSidebarOpen ? "text-primary" : "text-text-main/40",
               )}
             />
           </button>
-
-          <AnimatePresence>
-            {isDashboardMenuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsDashboardMenuOpen(false)}
-                />
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                  transition={{ duration: 0.16 }}
-                  className="absolute left-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-text-main/10 bg-card-bg/95 p-2 shadow-skeuo-lg backdrop-blur-xl"
-                >
-                  {dashboardMenuItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.label}
-                        to={item.path}
-                        onClick={() => setIsDashboardMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold text-text-main/70 transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer"
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Mobile Menu Toggle */}

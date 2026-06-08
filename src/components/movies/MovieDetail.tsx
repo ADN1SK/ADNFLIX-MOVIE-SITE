@@ -49,6 +49,9 @@ export default function MovieDetail() {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [isCastOverlayOpen, setIsCastOverlayOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
   const { theme } = useTheme();
   const navigate = useNavigate();
 
@@ -132,22 +135,31 @@ export default function MovieDetail() {
 
   const handleAddReview = () => {
     if (!movie) return;
-    const reviewText = prompt(`Share your thoughts on ${title}:`);
-    if (!reviewText) return;
+    setIsReviewModalOpen(true);
+  };
+
+  const handleSaveReview = () => {
+    if (!movie || !reviewText.trim()) return;
 
     const reviews = JSON.parse(localStorage.getItem("adnflix_reviews") || "[]");
     const newReview = {
       id: movie.id,
       title,
       poster_path: movie.poster_path,
-      review: reviewText,
+      review: reviewText.trim(),
+      rating: reviewRating,
       date: new Date().toISOString(),
       media_type: mediaType,
     };
+
     localStorage.setItem(
       "adnflix_reviews",
       JSON.stringify([newReview, ...reviews]),
     );
+
+    setIsReviewModalOpen(false);
+    setReviewText("");
+    setReviewRating(5);
 
     window.dispatchEvent(new Event("adnflix_sync"));
     window.dispatchEvent(
@@ -155,6 +167,12 @@ export default function MovieDetail() {
         detail: { message: "Review added!" },
       }),
     );
+  };
+
+  const handleCloseReviewModal = () => {
+    setIsReviewModalOpen(false);
+    setReviewText("");
+    setReviewRating(5);
   };
 
   const handleWatchTrailer = async () => {
@@ -247,6 +265,93 @@ export default function MovieDetail() {
         personId={selectedPersonId}
         onClose={() => setSelectedPersonId(null)}
       />
+      {isReviewModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-bg-main/75 backdrop-blur-xl"
+            onClick={handleCloseReviewModal}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="relative z-10 w-full max-w-3xl rounded-[2rem] border border-white/10 bg-card-bg/95 p-8 shadow-skeuo-lg backdrop-blur-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-primary/80 mb-2">
+                  Add a review
+                </p>
+                <h2 className="text-3xl font-bold text-text-main">
+                  Share your thoughts on {title}
+                </h2>
+              </div>
+              <button
+                onClick={handleCloseReviewModal}
+                className="rounded-full p-3 bg-card-bg border border-white/10 text-text-main/60 hover:text-primary transition-all"
+                aria-label="Close review modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-text-main/80">
+                  Your review
+                </label>
+                <textarea
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  rows={6}
+                  placeholder="Write what you loved, what stood out, or why this movie deserves a rewatch."
+                  className="w-full min-h-[170px] rounded-3xl border border-text-main/10 bg-bg-main/70 px-5 py-4 text-text-main outline-none transition-all focus:border-primary/40 focus:ring-2 focus:ring-primary/10"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-text-main/80">
+                  Rating
+                </p>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setReviewRating(value)}
+                      className={cn(
+                        "rounded-full p-3 transition-all border border-white/10",
+                        reviewRating >= value
+                          ? "bg-primary text-white"
+                          : "bg-card-bg text-text-main/50 hover:bg-card-bg/90",
+                      )}
+                    >
+                      <Star className="w-4 h-4" />
+                    </button>
+                  ))}
+                  <span className="text-sm font-medium text-text-main/70">
+                    {reviewRating}.0 / 5
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-2">
+                <button
+                  onClick={handleCloseReviewModal}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full border border-text-main/10 text-text-main hover:border-primary/40 hover:text-primary transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveReview}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-primary text-white font-bold hover:scale-[1.01] transition-all"
+                >
+                  Publish Review
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
       <CastOverlay
         isOpen={isCastOverlayOpen}
         movieTitle={title}
@@ -258,18 +363,18 @@ export default function MovieDetail() {
         }}
       />
       {/* Hero Header */}
-      <div className="relative h-[60vh] md:h-[70vh] overflow-hidden">
+      <div className="relative h-[60vh] md:h-[75vh] lg:h-[85vh] overflow-hidden">
         <div className="absolute inset-0">
           <img
             src={`${TMDB_CONFIG.IMG_BASE_URL}${TMDB_CONFIG.BACKDROP_SIZE}${movie.backdrop_path}`}
             alt={title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-[center_25%]"
             referrerPolicy="no-referrer"
           />
           {theme === "dark" && (
             <>
-              <div className="absolute inset-0 bg-gradient-to-t from-bg-main via-bg-main/10 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-bg-main/60 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-bg-main via-bg-main/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-bg-main/40 via-transparent to-transparent" />
             </>
           )}
         </div>
@@ -298,7 +403,7 @@ export default function MovieDetail() {
             <div className="flex flex-wrap items-center gap-6 text-sm text-text-main/80 font-medium mb-8">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/30 text-gold">
                 <Star className="w-4 h-4 fill-current" />
-                <span>{movie.vote_average.toFixed(1)} ADNFLIX Score</span>
+                <span>{movie.vote_average.toFixed(1)} IMDb Score</span>
               </div>
               {mediaType === "movie" ? (
                 <div className="flex items-center gap-2">
