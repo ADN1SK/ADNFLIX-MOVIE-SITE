@@ -22,7 +22,7 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/auth/signup", {
+      const response = await fetch("/api/users/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -36,9 +36,14 @@ export default function SignupPage() {
         throw new Error(data.error || "Signup failed");
       }
 
-      window.dispatchEvent(new CustomEvent("adnflix_toast", { 
-        detail: { message: "Signup Successful", movieTitle: "Welcome to ADNFLIX" } 
-      }));
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: {
+            message: "Signup Successful",
+            movieTitle: "Welcome to ADNFLIX",
+          },
+        }),
+      );
       navigate("/login");
     } catch (err: any) {
       setError(err.message);
@@ -54,8 +59,10 @@ export default function SignupPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 md:p-12"
       >
-        <h1 className="text-3xl font-black text-center mb-8 uppercase text-white">Neural Registration</h1>
-        
+        <h1 className="text-3xl font-black text-center mb-8 uppercase text-white">
+          Neural Registration
+        </h1>
+
         <form onSubmit={handleSignup} className="space-y-6">
           <div className="relative">
             <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-main/30" />
@@ -90,20 +97,27 @@ export default function SignupPage() {
               className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-primary/50"
             />
           </div>
-          
+
           {error && <p className="text-primary text-xs text-center">{error}</p>}
-          
+
           <button
             type="submit"
             disabled={isLoading}
             className="w-full py-4 rounded-2xl bg-primary text-white font-bold uppercase tracking-widest text-xs hover:scale-[1.02] transition-all disabled:opacity-50"
           >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Register"}
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+            ) : (
+              "Register"
+            )}
           </button>
         </form>
-        
+
         <p className="mt-8 text-center text-text-main/40 text-xs">
-          Already a member? <Link to="/login" className="text-primary hover:underline">Log in</Link>
+          Already a member?{" "}
+          <Link to="/login" className="text-primary hover:underline">
+            Log in
+          </Link>
         </p>
       </motion.div>
     </div>
