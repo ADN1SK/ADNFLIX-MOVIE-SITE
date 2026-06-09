@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -17,6 +12,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
+import WelcomeOverlay from "./WelcomeOverlay";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -25,6 +21,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [userName, setUserName] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -57,8 +54,6 @@ export default function LoginPage() {
       });
 
       const text = await response.text();
-      console.log("Raw response:", text);
-
       let data: any = {};
       if (text) {
         try {
@@ -73,20 +68,16 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("adnflix_auth_token", data.token);
-      window.dispatchEvent(
-        new CustomEvent("adnflix_toast", {
-          detail: {
-            message: "Authentication Successful",
-            movieTitle: "Welcome Back",
-          },
-        }),
-      );
-      navigate("/dashboard");
+      setUserName(data.name);
     } catch (err: any) {
       setError(err.message);
       setIsLoading(false);
     }
   };
+
+  if (userName) {
+    return <WelcomeOverlay username={userName} onComplete={() => navigate("/")} />;
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[#050505] py-10 px-4">

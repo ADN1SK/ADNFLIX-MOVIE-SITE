@@ -47,6 +47,24 @@ async function startServer() {
     });
   });
 
+  // Proxy for auth and user routes to the backend
+  app.use("/api/auth", async (req, res) => {
+    const backendUrl = `http://localhost:5000${req.originalUrl}`;
+    try {
+      const response = await fetch(backendUrl, {
+        method: req.method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: ["POST", "PUT"].includes(req.method) ? JSON.stringify(req.body) : undefined,
+      });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to proxy to backend" });
+    }
+  });
+
   // TMDB Proxy (to keep key on server)
   app.get("/api/movies/*", async (req, res) => {
     const cacheKey = req.url;

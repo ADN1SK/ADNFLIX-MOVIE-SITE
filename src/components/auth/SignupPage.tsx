@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import WelcomeOverlay from "./WelcomeOverlay";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -14,6 +15,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -44,21 +46,21 @@ export default function SignupPage() {
         throw new Error(data.error || data.message || "Signup failed");
       }
 
-      window.dispatchEvent(
-        new CustomEvent("adnflix_toast", {
-          detail: {
-            message: "Signup Successful",
-            movieTitle: "Welcome to ADNFLIX",
-          },
-        }),
-      );
-      navigate("/login");
+      // Automatically log the user in or just store the token if returned
+      if (data.token) {
+        localStorage.setItem("adnflix_auth_token", data.token);
+      }
+      
+      setUserName(data.name || name);
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setIsLoading(false);
     }
   };
+
+  if (userName) {
+    return <WelcomeOverlay username={userName} onComplete={() => navigate("/")} />;
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#050505] py-20 px-4">
