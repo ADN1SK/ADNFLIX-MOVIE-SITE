@@ -3,23 +3,29 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useState, useEffect, useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
-  Tv,
   Bookmark,
   Trash2,
   ChevronRight,
   Clock,
   Heart,
   LayoutDashboard,
+  LogIn,
   MessageSquare,
   Settings,
   ShieldCheck,
   User,
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import {
+  decodeJwtPayload,
+  getAuthToken,
+  getCurrentUserId,
+} from "@/src/lib/authSession";
 import MovieCard from "../movies/MovieCard";
+import type { Movie } from "@/src/types";
 
 const accountTabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -30,27 +36,116 @@ const accountTabs = [
 ];
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "overview";
+
+  const setActiveTab = (tab: string) => {
+    setSearchParams({ tab });
+  };
+
+  type SavedListItem = {
+    tmdb_movie_id: number;
+    movie_title: string;
+    type: "watchlist" | "favorite";
+  };
+
+  type ReviewItem = {
+    id: number;
+    title: string;
+    poster_path: string | null;
+    review: string;
+    date: string;
+    media_type: string;
+  };
+
+  type HistoryItem = Movie & {
+    media_type?: string;
+    watchedAt?: string;
+  };
 
   // Data States
-  const [watchlist, setWatchlist] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [history, setHistory] = useState([]);
+  const [watchlist, setWatchlist] = useState<Movie[]>([]);
+  const [favorites, setFavorites] = useState<Movie[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
 
-  const loadData = () => {
-    setWatchlist(JSON.parse(localStorage.getItem("adnflix_watchlist") || "[]"));
-    setFavorites(JSON.parse(localStorage.getItem("adnflix_favorites") || "[]"));
-    setReviews(JSON.parse(localStorage.getItem("adnflix_reviews") || "[]"));
-    setHistory(JSON.parse(localStorage.getItem("adnflix_history") || "[]"));
-  };
+  const loadData = useCallback(async () => {
+    const token = getAuthToken();
+    const userId = getCurrentUserId();
+
+    if (!token) {
+      setWatchlist([]);
+      setFavorites([]);
+    } else {
+      try {
+        const endpoints = [
+          { type: "watchlist", url: "/api/user-movies/watchlist" },
+          { type: "favorite", url: "/api/user-movies/favorite" },
+        ];
+
+        const results = await Promise.all(
+          endpoints.map(async (endpoint) => {
+            console.info("[DASHBOARD] fetching saved list", {
+              userId,
+              jwtPayload: decodeJwtPayload(token),
+              requestUrl: endpoint.url,
+            });
+            const res = await fetch(endpoint.url, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            console.info("[DASHBOARD] saved list response", {
+              userId,
+              requestUrl: endpoint.url,
+              responseData: data,
+            });
+            return { type: endpoint.type, data };
+          }),
+        );
+
+        const watchlistData: SavedListItem[] =
+          results.find((r) => r.type === "watchlist")?.data || [];
+        const favoritesData: SavedListItem[] =
+          results.find((r) => r.type === "favorite")?.data || [];
+
+        const fetchFullMovie = async (item: SavedListItem): Promise<Movie> => {
+          const res = await fetch(`/api/movies/movie/${item.tmdb_movie_id}`);
+          if (!res.ok) {
+            throw new Error(`Failed to load movie ${item.tmdb_movie_id}`);
+          }
+          return res.json();
+        };
+
+        const [fullWatchlist, fullFavorites] = await Promise.all([
+          Promise.all(watchlistData.map(fetchFullMovie)),
+          Promise.all(favoritesData.map(fetchFullMovie)),
+        ]);
+
+        setWatchlist(fullWatchlist);
+        setFavorites(fullFavorites);
+      } catch (err) {
+        console.error("Failed to load persistent data:", err);
+      }
+    }
+
+    // Still load non-persistent data from localStorage
+    setReviews(
+      JSON.parse(
+        localStorage.getItem("adnflix_reviews") || "[]",
+      ) as ReviewItem[],
+    );
+    setHistory(
+      JSON.parse(
+        localStorage.getItem("adnflix_history") || "[]",
+      ) as HistoryItem[],
+    );
+  }, []);
 
   useEffect(() => {
     loadData();
     window.addEventListener("adnflix_sync", loadData);
     return () => window.removeEventListener("adnflix_sync", loadData);
-  }, []);
+  }, [loadData]);
 
   const activeLabel =
     accountTabs.find((item) => item.id === activeTab)?.label || "Overview";
@@ -69,7 +164,7 @@ export default function Dashboard() {
     window.dispatchEvent(new Event("adnflix_sync"));
   };
 
-  const renderGrid = (items: any[]) => (
+  const renderGrid = (items: Movie[]) => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-6">
       {items.map((item) => (
         <MovieCard key={item.id} movie={item} />
@@ -115,30 +210,30 @@ export default function Dashboard() {
               </div>
             </div>
 
-              <div className="flex flex-col gap-3 md:items-end">
-                <Link
-                  to="/login"
-                  className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 cursor-pointer"
-                >
-                  <LogIn className="h-3 w-3" />
-                  Sign In
-                </Link>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:min-w-80">
-                  {accountStats.map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-xl border border-text-main/10 bg-bg-main/60 p-4 text-center"
-                    >
-                      <div className="text-2xl font-bold text-primary">
-                        {stat.value}
-                      </div>
-                      <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-text-main/35">
-                        {stat.label}
-                      </div>
+            <div className="flex flex-col gap-3 md:items-end">
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 cursor-pointer"
+              >
+                <LogIn className="h-3 w-3" />
+                Sign In
+              </Link>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:min-w-80">
+                {accountStats.map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-xl border border-text-main/10 bg-bg-main/60 p-4 text-center"
+                  >
+                    <div className="text-2xl font-bold text-primary">
+                      {stat.value}
                     </div>
-                  ))}
-                </div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-text-main/35">
+                      {stat.label}
+                    </div>
+                  </div>
+                ))}
               </div>
+            </div>
           </div>
         </header>
 
@@ -225,7 +320,7 @@ export default function Dashboard() {
             ) : activeTab === "reviews" ? (
               <div className="space-y-4">
                 {reviews.length > 0 ? (
-                  reviews.map((rev: any, i: number) => (
+                  reviews.map((rev: ReviewItem, i: number) => (
                     <div
                       key={i}
                       className="flex gap-6 p-4 rounded-2xl bg-bg-main/40 border border-text-main/5"
@@ -260,7 +355,7 @@ export default function Dashboard() {
             ) : currentContent.length > 0 ? (
               renderGrid(currentContent)
             ) : (
-              <div className="flex min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-text-main/10 bg-bg-main/40 p-8 text-center">
+              <div className="flex min-h-95 flex-col items-center justify-center rounded-2xl border border-dashed border-text-main/10 bg-bg-main/40 p-8 text-center">
                 <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                   <Bookmark className="h-7 w-7" />
                 </div>

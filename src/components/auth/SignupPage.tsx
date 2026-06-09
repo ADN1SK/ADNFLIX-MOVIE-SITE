@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import WelcomeOverlay from "./WelcomeOverlay";
+import { clearUserSession, decodeJwtPayload } from "@/src/lib/authSession";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -46,21 +46,37 @@ export default function SignupPage() {
         throw new Error(data.error || data.message || "Signup failed");
       }
 
-      // Automatically log the user in or just store the token if returned
       if (data.token) {
+        clearUserSession();
         localStorage.setItem("adnflix_auth_token", data.token);
+        localStorage.setItem(
+          "adnflix_user_id",
+          String(data.id ?? data.userId ?? ""),
+        );
+        localStorage.setItem("adnflix_user_name", data.name || name);
+        console.info("[AUTH] signup", {
+          userId: data.id ?? data.userId ?? null,
+          jwtPayload: decodeJwtPayload(data.token),
+          requestUrl: "/api/auth/signup",
+          responseData: data,
+        });
       }
-      
-      setUserName(data.name || name);
+
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: {
+            message: "Signup Successful",
+            movieTitle: "Welcome to ADNFLIX",
+          },
+        }),
+      );
+      navigate("/");
     } catch (err: any) {
       setError(err.message);
+    } finally {
       setIsLoading(false);
     }
   };
-
-  if (userName) {
-    return <WelcomeOverlay username={userName} onComplete={() => navigate("/")} />;
-  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#050505] py-20 px-4">

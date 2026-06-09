@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
-import WelcomeOverlay from "./WelcomeOverlay";
+import { clearUserSession, decodeJwtPayload } from "@/src/lib/authSession";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -67,17 +67,33 @@ export default function LoginPage() {
         throw new Error(data.error || `Login failed: ${response.statusText}`);
       }
 
+      clearUserSession();
       localStorage.setItem("adnflix_auth_token", data.token);
-      setUserName(data.name);
+      localStorage.setItem(
+        "adnflix_user_id",
+        String(data.id ?? data.userId ?? ""),
+      );
+      localStorage.setItem("adnflix_user_name", data.name || "");
+      console.info("[AUTH] login", {
+        userId: data.id ?? data.userId ?? null,
+        jwtPayload: decodeJwtPayload(data.token),
+        requestUrl: "/api/auth/login",
+        responseData: data,
+      });
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: {
+            message: "Authentication Successful",
+            movieTitle: "Welcome Back",
+          },
+        }),
+      );
+      navigate("/");
     } catch (err: any) {
       setError(err.message);
       setIsLoading(false);
     }
   };
-
-  if (userName) {
-    return <WelcomeOverlay username={userName} onComplete={() => navigate("/")} />;
-  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[#050505] py-10 px-4">

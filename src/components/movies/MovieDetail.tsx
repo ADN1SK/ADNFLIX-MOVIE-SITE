@@ -31,6 +31,7 @@ import VideoModal from "../layout/VideoModal";
 import PersonModal from "./PersonModal";
 import CastOverlay from "./CastOverlay";
 import { useTheme } from "@/src/lib/ThemeContext";
+import { getAuthToken } from "@/src/lib/authSession";
 
 interface MovieVideo {
   key: string;
@@ -59,24 +60,45 @@ export default function MovieDetail() {
   const [isInFavorites, setIsInFavorites] = useState(false);
 
   useEffect(() => {
-    const syncState = () => {
-      const watchlist = JSON.parse(
-        localStorage.getItem("adnflix_watchlist") || "[]",
-      );
-      const favorites = JSON.parse(
-        localStorage.getItem("adnflix_favorites") || "[]",
-      );
-      const movieId = movie?.id || parseInt(id || "0");
-      setIsInWatchlist(watchlist.some((m: any) => m.id === movieId));
-      setIsInFavorites(favorites.some((m: any) => m.id === movieId));
+    const syncState = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        setIsInWatchlist(false);
+        setIsInFavorites(false);
+        return;
+      }
+
+      try {
+        const movieId = movie?.id || parseInt(id || "0");
+        const [watchlistRes, favoritesRes] = await Promise.all([
+          fetch("/api/user-movies/watchlist", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch("/api/user-movies/favorite", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        const [watchlistData, favoritesData] = await Promise.all([
+          watchlistRes.json(),
+          favoritesRes.json(),
+        ]);
+        const watchlistIds = new Set(
+          watchlistData.map((item: any) => Number(item.tmdb_movie_id)),
+        );
+        const favoritesIds = new Set(
+          favoritesData.map((item: any) => Number(item.tmdb_movie_id)),
+        );
+        setIsInWatchlist(watchlistIds.has(movieId));
+        setIsInFavorites(favoritesIds.has(movieId));
+      } catch (error) {
+        console.error("Failed to sync movie detail saved lists", error);
+      }
     };
 
     syncState();
-    window.addEventListener("storage", syncState);
     window.addEventListener("adnflix_sync", syncState);
 
     return () => {
-      window.removeEventListener("storage", syncState);
       window.removeEventListener("adnflix_sync", syncState);
     };
   }, [id, movie?.id]);
@@ -197,46 +219,74 @@ export default function MovieDetail() {
     }
   };
 
-  const toggleWatchlist = () => {
+  const toggleWatchlist = async () => {
     if (!movie) return;
-    const watchlist = JSON.parse(
-      localStorage.getItem("adnflix_watchlist") || "[]",
-    );
-    const exists = watchlist.some((m: any) => m.id === movie.id);
-    const newWatchlist = exists
-      ? watchlist.filter((m: any) => m.id !== movie.id)
-      : [...watchlist, movie];
-    localStorage.setItem("adnflix_watchlist", JSON.stringify(newWatchlist));
-    window.dispatchEvent(new Event("adnflix_sync"));
-    window.dispatchEvent(
-      new CustomEvent("adnflix_toast", {
-        detail: {
-          message: exists ? "Removed from Watchlist" : "Added to Watchlist",
-          movieTitle: title,
-        },
-      }),
-    );
+    const token = getAuthToken();
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      if (isInWatchlist) {
+        await fetch(`/api/user-movies/watchlist/${movie.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsInWatchlist(false);
+      } else {
+        await fetch("/api/user-movies", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tmdb_movie_id: movie.id,
+            movie_title: title,
+            type: "watchlist",
+          }),
+        });
+        setIsInWatchlist(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const toggleFavorites = () => {
+  const toggleFavorites = async () => {
     if (!movie) return;
-    const favorites = JSON.parse(
-      localStorage.getItem("adnflix_favorites") || "[]",
-    );
-    const exists = favorites.some((m: any) => m.id === movie.id);
-    const newFavorites = exists
-      ? favorites.filter((m: any) => m.id !== movie.id)
-      : [...favorites, movie];
-    localStorage.setItem("adnflix_favorites", JSON.stringify(newFavorites));
-    window.dispatchEvent(new Event("adnflix_sync"));
-    window.dispatchEvent(
-      new CustomEvent("adnflix_toast", {
-        detail: {
-          message: exists ? "Removed from Favorites" : "Added to Favorites",
-          movieTitle: title,
-        },
-      }),
-    );
+    const token = getAuthToken();
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      if (isInFavorites) {
+        await fetch(`/api/user-movies/favorite/${movie.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsInFavorites(false);
+      } else {
+        await fetch("/api/user-movies", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tmdb_movie_id: movie.id,
+            movie_title: title,
+            type: "favorite",
+          }),
+        });
+        setIsInFavorites(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handlePersonClick = (personId: number) => {

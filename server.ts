@@ -56,12 +56,52 @@ async function startServer() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: ["POST", "PUT"].includes(req.method) ? JSON.stringify(req.body) : undefined,
+        body: ["POST", "PUT"].includes(req.method)
+          ? JSON.stringify(req.body)
+          : undefined,
       });
       const data = await response.json();
       res.status(response.status).json(data);
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to proxy to backend" });
+    }
+  });
+
+  app.use("/api/user-movies", async (req, res) => {
+    const backendUrl = `http://localhost:5000${req.originalUrl}`;
+    try {
+      const headers = new Headers();
+      const authorization = req.headers.authorization;
+      if (authorization) {
+        headers.set("Authorization", authorization);
+      }
+      const contentType = req.headers["content-type"];
+      if (contentType) {
+        headers.set(
+          "Content-Type",
+          Array.isArray(contentType) ? contentType[0] : contentType,
+        );
+      }
+
+      const hasBody = !["GET", "HEAD"].includes(req.method);
+      const response = await fetch(backendUrl, {
+        method: req.method,
+        headers,
+        body: hasBody ? JSON.stringify(req.body ?? {}) : undefined,
+      });
+
+      const text = await response.text();
+      res.status(response.status);
+      response.headers.forEach((value, key) => {
+        if (
+          !["content-length", "transfer-encoding"].includes(key.toLowerCase())
+        ) {
+          res.setHeader(key, value);
+        }
+      });
+      res.send(text || undefined);
+    } catch {
+      res.status(500).json({ error: "Failed to proxy user-movies request" });
     }
   });
 

@@ -22,6 +22,7 @@ import { cn } from "@/src/lib/utils";
 import { Link } from "react-router-dom";
 import VideoModal from "../layout/VideoModal";
 import { useTheme } from "@/src/lib/ThemeContext";
+import { getAuthToken } from "@/src/lib/authSession";
 
 interface HeroProps {
   movies: Movie[];
@@ -50,41 +51,70 @@ export default function Hero({ movies }: HeroProps) {
   }, [movies.length]);
 
   useEffect(() => {
-    const syncState = () => {
-      const watchlist = JSON.parse(
-        localStorage.getItem("adnflix_watchlist") || "[]",
-      );
-      setIsInWatchlist(watchlist.some((m: any) => m.id === movie.id));
+    const syncState = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        setIsInWatchlist(false);
+        return;
+      }
+      try {
+        const res = await fetch("/api/user-movies/watchlist", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        setIsInWatchlist(
+          data.some((item: any) => Number(item.tmdb_movie_id) === movie.id),
+        );
+      } catch (error) {
+        console.error("Failed to sync hero watchlist", error);
+      }
     };
 
     syncState();
-    window.addEventListener("storage", syncState);
     window.addEventListener("adnflix_sync", syncState);
 
     return () => {
-      window.removeEventListener("storage", syncState);
       window.removeEventListener("adnflix_sync", syncState);
     };
   }, [movie.id]);
 
-  const toggleWatchlist = () => {
-    const watchlist = JSON.parse(
-      localStorage.getItem("adnflix_watchlist") || "[]",
-    );
-    const exists = watchlist.some((m: any) => m.id === movie.id);
-    const newWatchlist = exists
-      ? watchlist.filter((m: any) => m.id !== movie.id)
-      : [...watchlist, movie];
-    localStorage.setItem("adnflix_watchlist", JSON.stringify(newWatchlist));
-    window.dispatchEvent(new Event("adnflix_sync"));
-    window.dispatchEvent(
-      new CustomEvent("adnflix_toast", {
-        detail: {
-          message: exists ? "Removed from Watchlist" : "Added to Watchlist",
-          movieTitle: movie.title || (movie as any).name,
-        },
-      }),
-    );
+  const toggleWatchlist = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "Please log in to manage saved movies" },
+        }),
+      );
+      return;
+    }
+
+    try {
+      if (isInWatchlist) {
+        await fetch(`/api/user-movies/watchlist/${movie.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsInWatchlist(false);
+      } else {
+        await fetch("/api/user-movies", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tmdb_movie_id: movie.id,
+            movie_title: movie.title || (movie as any).name,
+            type: "watchlist",
+          }),
+        });
+        setIsInWatchlist(true);
+      }
+      window.dispatchEvent(new Event("adnflix_sync"));
+    } catch (error) {
+      console.error("Failed to update hero watchlist", error);
+    }
   };
 
   const handleWatchTrailer = async () => {

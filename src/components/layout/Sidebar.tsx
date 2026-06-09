@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   TrendingUp,
@@ -19,6 +19,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { clearUserSession } from "@/src/lib/authSession";
 import { motion, AnimatePresence } from "motion/react";
 
 interface SidebarProps {
@@ -42,6 +43,12 @@ const dashboardItems = [
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    clearUserSession();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <>
@@ -61,14 +68,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar Container */}
       <motion.aside
         initial={false}
-        animate={{ 
+        animate={{
           x: isOpen ? 0 : -320,
-          width: isOpen ? 320 : 0
+          width: isOpen ? 320 : 0,
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={cn(
           "fixed top-20 left-0 bottom-0 z-[110] bg-card-bg/95 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden",
-          !isOpen && "pointer-events-none border-none"
+          !isOpen && "pointer-events-none border-none",
         )}
       >
         {/* Content */}
@@ -88,13 +95,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-xl transition-all group relative overflow-hidden",
-                    isActive 
-                      ? "bg-primary/10 text-primary" 
-                      : "text-text-main/60 hover:bg-white/5 hover:text-text-main cursor-pointer"
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-text-main/60 hover:bg-white/5 hover:text-text-main cursor-pointer",
                   )}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="font-bold text-sm tracking-tight">{item.label}</span>
+                  <span className="font-bold text-sm tracking-tight">
+                    {item.label}
+                  </span>
                   {isActive && (
                     <motion.div
                       layoutId="sidebar-active"
@@ -113,7 +122,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </h4>
             {dashboardItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === "/dashboard" && location.search.includes(item.path.split('=')[1] || "overview");
+              const isActive =
+                location.pathname === "/dashboard" &&
+                location.search.includes(item.path.split("=")[1] || "overview");
               return (
                 <Link
                   key={item.label}
@@ -121,13 +132,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-xl transition-all group relative",
-                    isActive 
-                      ? "bg-primary/10 text-primary" 
-                      : "text-text-main/60 hover:bg-white/5 hover:text-text-main cursor-pointer"
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-text-main/60 hover:bg-white/5 hover:text-text-main cursor-pointer",
                   )}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="font-bold text-sm tracking-tight">{item.label}</span>
+                  <span className="font-bold text-sm tracking-tight">
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -147,6 +160,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <span>Account Settings</span>
             </Link>
             <button
+              type="button"
+              onClick={handleLogout}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-main/30 hover:bg-red-500/10 hover:text-red-500 transition-all font-bold text-sm cursor-pointer"
             >
               <LogOut className="w-5 h-5" />

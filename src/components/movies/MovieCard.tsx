@@ -10,6 +10,7 @@ import { Movie } from "@/src/types";
 import { TMDB_CONFIG } from "@/src/constants";
 import { cn } from "@/src/lib/utils";
 import { Link } from "react-router-dom";
+import { decodeJwtPayload, getAuthToken } from "@/src/lib/authSession";
 
 interface MovieCardProps {
   movie: Movie;
@@ -26,69 +27,133 @@ export default function MovieCard({
   const [isInFavorites, setIsInFavorites] = useState(false);
 
   useEffect(() => {
-    const syncState = () => {
-      const watchlist = JSON.parse(
-        localStorage.getItem("adnflix_watchlist") || "[]",
-      );
-      const favorites = JSON.parse(
-        localStorage.getItem("adnflix_favorites") || "[]",
-      );
-      setIsInWatchlist(watchlist.some((m: any) => m.id === movie.id));
-      setIsInFavorites(favorites.some((m: any) => m.id === movie.id));
+    const syncState = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        setIsInWatchlist(false);
+        setIsInFavorites(false);
+        return;
+      }
+
+      try {
+        console.info("[MOVIE_CARD] syncing saved lists", {
+          userId: Number(localStorage.getItem("adnflix_user_id") || 0) || null,
+          jwtPayload: decodeJwtPayload(token),
+          requestUrl: "/api/user-movies/watchlist",
+        });
+        const [watchlistRes, favoritesRes] = await Promise.all([
+          fetch("/api/user-movies/watchlist", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch("/api/user-movies/favorite", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        const [watchlistData, favoritesData] = await Promise.all([
+          watchlistRes.json(),
+          favoritesRes.json(),
+        ]);
+        const watchlistIds = new Set(
+          watchlistData.map((item: any) => Number(item.tmdb_movie_id)),
+        );
+        const favoritesIds = new Set(
+          favoritesData.map((item: any) => Number(item.tmdb_movie_id)),
+        );
+        setIsInWatchlist(watchlistIds.has(movie.id));
+        setIsInFavorites(favoritesIds.has(movie.id));
+      } catch (error) {
+        console.error("Failed to sync movie card saved lists", error);
+      }
     };
 
     syncState();
-    window.addEventListener("storage", syncState);
     window.addEventListener("adnflix_sync", syncState);
 
     return () => {
-      window.removeEventListener("storage", syncState);
       window.removeEventListener("adnflix_sync", syncState);
     };
   }, [movie.id]);
 
-  const toggleWatchlist = (e: React.MouseEvent) => {
+  const toggleWatchlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const watchlist = JSON.parse(
-      localStorage.getItem("adnflix_watchlist") || "[]",
-    );
-    const exists = watchlist.some((m: any) => m.id === movie.id);
-    const newWatchlist = exists
-      ? watchlist.filter((m: any) => m.id !== movie.id)
-      : [...watchlist, movie];
-    localStorage.setItem("adnflix_watchlist", JSON.stringify(newWatchlist));
-    window.dispatchEvent(new Event("adnflix_sync"));
-    window.dispatchEvent(
-      new CustomEvent("adnflix_toast", {
-        detail: {
-          message: exists ? "Removed from Watchlist" : "Added to Watchlist",
-          movieTitle: movie.title || (movie as any).name,
-        },
-      }),
-    );
+    const token = getAuthToken();
+    if (!token) {
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "Please log in to manage saved movies" },
+        }),
+      );
+      return;
+    }
+
+    try {
+      if (isInWatchlist) {
+        await fetch(`/api/user-movies/watchlist/${movie.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsInWatchlist(false);
+      } else {
+        await fetch("/api/user-movies", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tmdb_movie_id: movie.id,
+            movie_title: movie.title || (movie as any).name,
+            type: "watchlist",
+          }),
+        });
+        setIsInWatchlist(true);
+      }
+      window.dispatchEvent(new Event("adnflix_sync"));
+    } catch (error) {
+      console.error("Failed to update watchlist", error);
+    }
   };
 
-  const toggleFavorites = (e: React.MouseEvent) => {
+  const toggleFavorites = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const favorites = JSON.parse(
-      localStorage.getItem("adnflix_favorites") || "[]",
-    );
-    const exists = favorites.some((m: any) => m.id === movie.id);
-    const newFavorites = exists
-      ? favorites.filter((m: any) => m.id !== movie.id)
-      : [...favorites, movie];
-    localStorage.setItem("adnflix_favorites", JSON.stringify(newFavorites));
-    window.dispatchEvent(new Event("adnflix_sync"));
-    window.dispatchEvent(
-      new CustomEvent("adnflix_toast", {
-        detail: {
-          message: exists ? "Removed from Favorites" : "Added to Favorites",
-          movieTitle: movie.title || (movie as any).name,
-        },
-      }),
-    );
+    const token = getAuthToken();
+    if (!token) {
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "Please log in to manage saved movies" },
+        }),
+      );
+      return;
+    }
+
+    try {
+      if (isInFavorites) {
+        await fetch(`/api/user-movies/favorite/${movie.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsInFavorites(false);
+      } else {
+        await fetch("/api/user-movies", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tmdb_movie_id: movie.id,
+            movie_title: movie.title || (movie as any).name,
+            type: "favorite",
+          }),
+        });
+        setIsInFavorites(true);
+      }
+      window.dispatchEvent(new Event("adnflix_sync"));
+    } catch (error) {
+      console.error("Failed to update favorites", error);
+    }
   };
 
   const ratingColor =
