@@ -71,10 +71,10 @@ export default function MovieDetail() {
       try {
         const movieId = movie?.id || parseInt(id || "0");
         const [watchlistRes, favoritesRes] = await Promise.all([
-          fetch("/api/user-movies/watchlist", {
+          fetch("http://127.0.0.1:5000/api/user-movies/watchlist", {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch("/api/user-movies/favorite", {
+          fetch("http://127.0.0.1:5000/api/user-movies/favorite", {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -108,9 +108,9 @@ export default function MovieDetail() {
       setLoading(true);
       try {
         const [movieData, castData, similarData] = await Promise.all([
-          fetch(`/api/movies/${mediaType}/${id}`).then((r) => r.json()),
-          fetch(`/api/movies/${mediaType}/${id}/credits`).then((r) => r.json()),
-          fetch(`/api/movies/${mediaType}/${id}/recommendations`).then((r) =>
+          fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}`).then((r) => r.json()),
+          fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/credits`).then((r) => r.json()),
+          fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/recommendations`).then((r) =>
             r.json(),
           ),
         ]);
@@ -157,38 +157,98 @@ export default function MovieDetail() {
 
   const handleAddReview = () => {
     if (!movie) return;
+    const token = getAuthToken();
+    if (!token) {
+      navigate("/login");
+      return;
+    }
     setIsReviewModalOpen(true);
   };
 
-  const handleSaveReview = () => {
-    if (!movie || !reviewText.trim()) return;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const reviews = JSON.parse(localStorage.getItem("adnflix_reviews") || "[]");
-    const newReview = {
-      id: movie.id,
-      title,
-      poster_path: movie.poster_path,
-      review: reviewText.trim(),
-      rating: reviewRating,
-      date: new Date().toISOString(),
-      media_type: mediaType,
-    };
+  const handleSaveReview = async () => {
+    console.log("[handleSaveReview] triggered", { movie: !!movie, reviewText: reviewText.trim() });
+    if (!movie || !reviewText.trim()) {
+      if (!reviewText.trim()) {
+        window.dispatchEvent(
+          new CustomEvent("adnflix_toast", {
+            detail: { message: "Please write something before publishing." },
+          }),
+        );
+      }
+      return;
+    }
 
-    localStorage.setItem(
-      "adnflix_reviews",
-      JSON.stringify([newReview, ...reviews]),
-    );
+    const token = getAuthToken();
+    if (!token) {
+      console.warn("[handleSaveReview] No token found, redirecting to login");
+      navigate("/login");
+      return;
+    }
 
-    setIsReviewModalOpen(false);
-    setReviewText("");
-    setReviewRating(5);
+    setIsSubmitting(true);
+    try {
+      const movieTitle = movie.title || (movie as any).name || "Unknown Movie";
+      console.log("[handleSaveReview] sending request", { id: movie.id, movieTitle });
 
-    window.dispatchEvent(new Event("adnflix_sync"));
-    window.dispatchEvent(
-      new CustomEvent("adnflix_toast", {
-        detail: { message: "Review added!" },
-      }),
-    );
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.warn("[handleSaveReview] Request timed out after 30s");
+      }, 30000); // Increased to 30s
+
+      const response = await fetch("http://127.0.0.1:5000/api/reviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          tmdb_movie_id: movie.id,
+          movie_title: movieTitle,
+          rating: reviewRating,
+          review_text: reviewText.trim(),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      console.log("[handleSaveReview] response received", { status: response.status });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to save review");
+      }
+
+      setIsReviewModalOpen(false);
+      setReviewText("");
+      setReviewRating(5);
+
+      window.dispatchEvent(new Event("adnflix_sync"));
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "Review published successfully!" },
+        }),
+      );
+    } catch (err: any) {
+      console.error("Error saving review:", err);
+      let errorMessage = "Failed to publish review. Please try again.";
+      
+      if (err.name === 'AbortError') {
+        errorMessage = "Request timed out. Please check if your backend server is running.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: errorMessage },
+        }),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCloseReviewModal = () => {
@@ -200,7 +260,7 @@ export default function MovieDetail() {
   const handleWatchTrailer = async () => {
     if (!movie) return;
     try {
-      const res = await fetch(`/api/movies/${mediaType}/${movie.id}/videos`);
+      const res = await fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${movie.id}/videos`);
       const data = await res.json();
       const trailer = data.results?.find(
         (v: MovieVideo) => v.type === "Trailer" && v.site === "YouTube",
@@ -227,15 +287,24 @@ export default function MovieDetail() {
       return;
     }
 
+    const movieTitle = movie.title || (movie as any).name || "Unknown Movie";
+
     try {
       if (isInWatchlist) {
-        await fetch(`/api/user-movies/watchlist/${movie.id}`, {
+        const res = await fetch(`http://127.0.0.1:5000/api/user-movies/watchlist/${movie.id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
-        setIsInWatchlist(false);
+        if (res.ok) {
+          setIsInWatchlist(false);
+          window.dispatchEvent(
+            new CustomEvent("adnflix_toast", {
+              detail: { message: "Removed from Watchlist" },
+            }),
+          );
+        }
       } else {
-        await fetch("/api/user-movies", {
+        const res = await fetch("http://127.0.0.1:5000/api/user-movies", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -243,12 +312,20 @@ export default function MovieDetail() {
           },
           body: JSON.stringify({
             tmdb_movie_id: movie.id,
-            movie_title: title,
+            movie_title: movieTitle,
             type: "watchlist",
           }),
         });
-        setIsInWatchlist(true);
+        if (res.ok) {
+          setIsInWatchlist(true);
+          window.dispatchEvent(
+            new CustomEvent("adnflix_toast", {
+              detail: { message: "Added to Watchlist" },
+            }),
+          );
+        }
       }
+      window.dispatchEvent(new Event("adnflix_sync"));
     } catch (err) {
       console.error(err);
     }
@@ -262,15 +339,24 @@ export default function MovieDetail() {
       return;
     }
 
+    const movieTitle = movie.title || (movie as any).name || "Unknown Movie";
+
     try {
       if (isInFavorites) {
-        await fetch(`/api/user-movies/favorite/${movie.id}`, {
+        const res = await fetch(`http://127.0.0.1:5000/api/user-movies/favorite/${movie.id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
-        setIsInFavorites(false);
+        if (res.ok) {
+          setIsInFavorites(false);
+          window.dispatchEvent(
+            new CustomEvent("adnflix_toast", {
+              detail: { message: "Removed from Favorites" },
+            }),
+          );
+        }
       } else {
-        await fetch("/api/user-movies", {
+        const res = await fetch("http://127.0.0.1:5000/api/user-movies", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -278,12 +364,20 @@ export default function MovieDetail() {
           },
           body: JSON.stringify({
             tmdb_movie_id: movie.id,
-            movie_title: title,
+            movie_title: movieTitle,
             type: "favorite",
           }),
         });
-        setIsInFavorites(true);
+        if (res.ok) {
+          setIsInFavorites(true);
+          window.dispatchEvent(
+            new CustomEvent("adnflix_toast", {
+              detail: { message: "Added to Favorites" },
+            }),
+          );
+        }
       }
+      window.dispatchEvent(new Event("adnflix_sync"));
     } catch (err) {
       console.error(err);
     }
@@ -393,9 +487,20 @@ export default function MovieDetail() {
                 </button>
                 <button
                   onClick={handleSaveReview}
-                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-primary text-white font-bold hover:scale-[1.01] transition-all"
+                  disabled={isSubmitting}
+                  className={cn(
+                    "w-full sm:w-auto px-6 py-3 rounded-full bg-primary text-white font-bold transition-all",
+                    isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:scale-[1.01] cursor-pointer"
+                  )}
                 >
-                  Publish Review
+                  {isSubmitting ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                      Publishing...
+                    </div>
+                  ) : (
+                    "Publish Review"
+                  )}
                 </button>
               </div>
             </div>

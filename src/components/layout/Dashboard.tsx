@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Settings,
   ShieldCheck,
+  Star,
   User,
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
@@ -51,11 +52,12 @@ export default function Dashboard() {
 
   type ReviewItem = {
     id: number;
-    title: string;
-    poster_path: string | null;
-    review: string;
-    date: string;
-    media_type: string;
+    user_id: number;
+    tmdb_movie_id: number;
+    movie_title: string;
+    rating: number;
+    review_text: string;
+    created_at: string;
   };
 
   type HistoryItem = Movie & {
@@ -76,29 +78,21 @@ export default function Dashboard() {
     if (!token) {
       setWatchlist([]);
       setFavorites([]);
+      setReviews([]);
     } else {
       try {
         const endpoints = [
-          { type: "watchlist", url: "/api/user-movies/watchlist" },
-          { type: "favorite", url: "/api/user-movies/favorite" },
+          { type: "watchlist", url: "http://127.0.0.1:5000/api/user-movies/watchlist" },
+          { type: "favorite", url: "http://127.0.0.1:5000/api/user-movies/favorite" },
+          { type: "reviews", url: `http://127.0.0.1:5000/api/reviews/${userId}` },
         ];
 
         const results = await Promise.all(
           endpoints.map(async (endpoint) => {
-            console.info("[DASHBOARD] fetching saved list", {
-              userId,
-              jwtPayload: decodeJwtPayload(token),
-              requestUrl: endpoint.url,
-            });
             const res = await fetch(endpoint.url, {
               headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
-            console.info("[DASHBOARD] saved list response", {
-              userId,
-              requestUrl: endpoint.url,
-              responseData: data,
-            });
             return { type: endpoint.type, data };
           }),
         );
@@ -107,9 +101,11 @@ export default function Dashboard() {
           results.find((r) => r.type === "watchlist")?.data || [];
         const favoritesData: SavedListItem[] =
           results.find((r) => r.type === "favorite")?.data || [];
+        const reviewsData: ReviewItem[] =
+          results.find((r) => r.type === "reviews")?.data || [];
 
         const fetchFullMovie = async (item: SavedListItem): Promise<Movie> => {
-          const res = await fetch(`/api/movies/movie/${item.tmdb_movie_id}`);
+          const res = await fetch(`http://127.0.0.1:5000/api/movies/movie/${item.tmdb_movie_id}`);
           if (!res.ok) {
             throw new Error(`Failed to load movie ${item.tmdb_movie_id}`);
           }
@@ -123,17 +119,13 @@ export default function Dashboard() {
 
         setWatchlist(fullWatchlist);
         setFavorites(fullFavorites);
+        setReviews(reviewsData);
       } catch (err) {
         console.error("Failed to load persistent data:", err);
       }
     }
 
     // Still load non-persistent data from localStorage
-    setReviews(
-      JSON.parse(
-        localStorage.getItem("adnflix_reviews") || "[]",
-      ) as ReviewItem[],
-    );
     setHistory(
       JSON.parse(
         localStorage.getItem("adnflix_history") || "[]",
@@ -162,6 +154,38 @@ export default function Dashboard() {
   const clearHistory = () => {
     localStorage.removeItem("adnflix_history");
     window.dispatchEvent(new Event("adnflix_sync"));
+  };
+
+  const handleDeleteReview = async (reviewId: number) => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    if (!confirm("Are you sure you want to delete this review?")) return;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/api/reviews/manage/${reviewId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        window.dispatchEvent(new Event("adnflix_sync"));
+        window.dispatchEvent(
+          new CustomEvent("adnflix_toast", {
+            detail: { message: "Review deleted successfully" },
+          }),
+        );
+      } else {
+        throw new Error("Failed to delete review");
+      }
+    } catch (err) {
+      console.error(err);
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "Error deleting review" },
+        }),
+      );
+    }
   };
 
   const renderGrid = (items: Movie[]) => (
@@ -320,29 +344,65 @@ export default function Dashboard() {
             ) : activeTab === "reviews" ? (
               <div className="space-y-4">
                 {reviews.length > 0 ? (
-                  reviews.map((rev: ReviewItem, i: number) => (
+                  reviews.map((rev: ReviewItem) => (
                     <div
-                      key={i}
-                      className="flex gap-6 p-4 rounded-2xl bg-bg-main/40 border border-text-main/5"
+                      key={rev.id}
+                      className="flex flex-col gap-4 p-6 rounded-2xl bg-bg-main/40 border border-text-main/10 shadow-skeuo-sm"
                     >
-                      <Link
-                        to={`/movies/${rev.id}?type=${rev.media_type}`}
-                        className="w-20 h-28 shrink-0 rounded-lg overflow-hidden border border-text-main/10 shadow-sm"
-                      >
-                        <img
-                          src={`https://image.tmdb.org/t/p/w185${rev.poster_path}`}
-                          className="w-full h-full object-cover"
-                          alt=""
-                        />
-                      </Link>
-                      <div>
-                        <h4 className="font-bold text-lg mb-1">{rev.title}</h4>
-                        <p className="text-[10px] font-bold uppercase text-primary mb-3">
-                          {new Date(rev.date).toLocaleDateString()}
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                          <h4 className="font-bold text-xl text-text-main">
+                            {rev.movie_title}
+                          </h4>
+                          <p className="text-[10px] font-bold uppercase text-text-main/40 tracking-widest mt-1">
+                            {new Date(rev.created_at).toLocaleDateString(
+                              undefined,
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              },
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={cn(
+                                "w-3 h-3",
+                                star <= rev.rating
+                                  ? "fill-primary text-primary"
+                                  : "text-text-main/20",
+                              )}
+                            />
+                          ))}
+                          <span className="ml-1.5 text-xs font-bold text-primary">
+                            {rev.rating}.0
+                          </span>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute -left-2 -top-2 text-4xl text-primary/10 font-serif">
+                          "
+                        </span>
+                        <p className="text-sm text-text-main/70 italic leading-relaxed pl-4">
+                          {rev.review_text}
                         </p>
-                        <p className="text-sm text-text-main/60 italic leading-relaxed">
-                          "{rev.review}"
-                        </p>
+                      </div>
+                      <div className="flex justify-end gap-3 mt-2">
+                        <button
+                          onClick={() => handleDeleteReview(rev.id)}
+                          className="text-[10px] font-bold uppercase tracking-widest text-text-main/30 hover:text-red-500 transition-colors"
+                        >
+                          Delete
+                        </button>
+                        <Link
+                          to={`/movies/${rev.tmdb_movie_id}`}
+                          className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline"
+                        >
+                          View Movie
+                        </Link>
                       </div>
                     </div>
                   ))
