@@ -28,7 +28,7 @@
     "mongodb": "^7.2.0",
     "mongoose": "^9.6.1",
     "motion": "^12.23.24",
-    "next-auth": "^4.24.14",
+    "next-auth": "^3.29.10",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-router-dom": "^7.14.2",

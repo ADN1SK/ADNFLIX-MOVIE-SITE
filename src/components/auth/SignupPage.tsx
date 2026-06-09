@@ -22,7 +22,7 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/users/signup", {
+      const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -30,10 +30,18 @@ export default function SignupPage() {
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data: any = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (parseError) {
+          data = { error: text };
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || "Signup failed");
+        throw new Error(data.error || data.message || "Signup failed");
       }
 
       window.dispatchEvent(
