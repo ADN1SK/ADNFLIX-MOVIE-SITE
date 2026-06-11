@@ -501,26 +501,7 @@ export default function Navbar({
                         <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
                         <span className="text-sm font-bold tracking-tight">User Settings</span>
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSettingsOpen(false);
-                          setIsPreferencesOpen(true);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-primary/10 text-text-main/70 hover:text-primary group cursor-pointer"
-                      >
-                        <Sliders className="w-4 h-4" />
-                        <span className="text-sm font-bold tracking-tight">Preferences</span>
-                      </button>
                       <div className="my-1 border-t border-text-main/5" />
-                      <button
-                        type="button"
-                        onClick={handleSignOut}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-red-500/10 text-text-main/70 hover:text-red-500 group cursor-pointer"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span className="text-sm font-bold tracking-tight">Sign Out</span>
-                      </button>
                     </div>
                   </motion.div>
                 )}

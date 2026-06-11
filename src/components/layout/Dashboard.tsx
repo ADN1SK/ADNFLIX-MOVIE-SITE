@@ -27,6 +27,7 @@ import {
 } from "@/src/lib/authSession";
 import MovieCard from "../movies/MovieCard";
 import type { Movie } from "@/src/types";
+import OverviewDashboard from "./OverviewDashboard";
 
 const accountTabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -238,13 +239,6 @@ export default function Dashboard() {
             </div>
 
             <div className="flex flex-col gap-3 md:items-end">
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 cursor-pointer"
-              >
-                <LogIn className="h-3 w-3" />
-                Sign In
-              </Link>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:min-w-80">
                 {accountStats.map((stat) => (
                   <div
@@ -318,32 +312,7 @@ export default function Dashboard() {
             </div>
 
             {activeTab === "overview" ? (
-              <div className="space-y-12">
-                <section>
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-text-main/30 mb-6">
-                    Recent History
-                  </h3>
-                  {history.length > 0 ? (
-                    renderGrid(history.slice(0, 5))
-                  ) : (
-                    <p className="text-sm text-text-main/20 italic">
-                      No history yet.
-                    </p>
-                  )}
-                </section>
-                <section>
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-text-main/30 mb-6">
-                    Watchlist Preview
-                  </h3>
-                  {watchlist.length > 0 ? (
-                    renderGrid(watchlist.slice(0, 5))
-                  ) : (
-                    <p className="text-sm text-text-main/20 italic">
-                      Watchlist is empty.
-                    </p>
-                  )}
-                </section>
-              </div>
+              <OverviewDashboard history={history} watchlist={watchlist} favorites={favorites} reviews={reviews} />
             ) : activeTab === "reviews" ? (
               <div className="space-y-4">
                 {reviews.length > 0 ? (
