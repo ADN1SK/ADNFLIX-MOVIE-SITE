@@ -92,6 +92,9 @@ export default function Dashboard() {
             const res = await fetch(endpoint.url, {
               headers: { Authorization: `Bearer ${token}` },
             });
+            if (!res.ok) {
+              throw new Error(`Failed to load ${endpoint.type}`);
+            }
             const data = await res.json();
             return { type: endpoint.type, data };
           }),
@@ -190,8 +193,8 @@ export default function Dashboard() {
 
   const renderGrid = (items: Movie[]) => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-6">
-      {items.map((item) => (
-        <MovieCard key={item.id} movie={item} />
+      {items.map((item, index) => (
+        <MovieCard key={`${item.id}-${index}`} movie={item} />
       ))}
     </div>
   );

@@ -79,14 +79,29 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#050505] py-20 px-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[#050505] py-20 px-4 relative overflow-hidden">
+      {/* Back to Home Button - Top Left */}
+      <div className="absolute top-8 left-4 md:left-12 z-20">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-3 text-text-main/40 hover:text-primary transition-all group"
+        >
+          <div className="w-10 h-10 rounded-full border border-white/5 bg-white/5 flex items-center justify-center group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-[0.4em] hidden sm:block">
+            Home
+          </span>
+        </Link>
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 md:p-12"
+        className="w-full max-w-md bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 md:p-12 relative z-10"
       >
         <h1 className="text-3xl font-black text-center mb-8 uppercase text-white">
-          Neural Registration
+          Create Account
         </h1>
 
         <form onSubmit={handleSignup} className="space-y-6">
@@ -134,7 +149,7 @@ export default function SignupPage() {
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin mx-auto" />
             ) : (
-              "Register"
+              "Sign Up"
             )}
           </button>
         </form>
@@ -142,7 +157,7 @@ export default function SignupPage() {
         <p className="mt-8 text-center text-text-main/40 text-xs">
           Already a member?{" "}
           <Link to="/login" className="text-primary hover:underline">
-            Log in
+            Login
           </Link>
         </p>
       </motion.div>

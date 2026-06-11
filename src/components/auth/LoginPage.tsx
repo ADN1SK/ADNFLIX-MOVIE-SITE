@@ -97,6 +97,21 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[#050505] py-10 px-4">
+      {/* Back to Home Button - Top Left */}
+      <div className="absolute top-8 left-4 md:left-12 z-20">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-3 text-text-main/40 hover:text-primary transition-all group"
+        >
+          <div className="w-10 h-10 rounded-full border border-white/5 bg-white/5 flex items-center justify-center group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-[0.4em] hidden sm:block">
+            Home
+          </span>
+        </Link>
+      </div>
+
       {/* Background Elements - Simplified for mobile */}
       <div className="absolute inset-0 z-0 hidden md:block">
         <div
@@ -114,17 +129,6 @@ export default function LoginPage() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-md relative z-10"
       >
-        {/* Navigation Link */}
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-text-main/40 hover:text-primary transition-all mb-8 group"
-        >
-          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.3em]">
-            Neural Link Exit
-          </span>
-        </Link>
-
         {/* Card */}
         <div className="relative bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl">
           <div className="p-8 md:p-12">
@@ -134,10 +138,10 @@ export default function LoginPage() {
                 <ShieldCheck className="w-8 h-8 text-primary" />
               </div>
               <h1 className="text-2xl md:text-3xl font-black tracking-tighter mb-1 uppercase text-white">
-                Identity Check
+                Account Login
               </h1>
               <p className="text-primary/60 text-[9px] font-bold uppercase tracking-[0.3em]">
-                Secure Protocol Active
+                Enter your credentials
               </p>
             </div>
 
@@ -145,7 +149,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[9px] font-bold uppercase tracking-[0.3em] text-text-main/40 ml-1">
-                  Universal Identification
+                  Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-main/30" />
@@ -154,7 +158,7 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="ACCESS_KEY@NODE.SYS"
+                    placeholder="email@example.com"
                     className="w-full bg-white/5 border border-white/5 rounded-2xl py-3.5 pl-12 pr-4 text-sm text-white outline-none focus:border-primary/50 focus:bg-white/10 transition-all placeholder:text-white/10"
                   />
                 </div>
@@ -163,7 +167,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
                   <label className="text-[9px] font-bold uppercase tracking-[0.3em] text-text-main/40">
-                    Encrypted Cipher
+                    Password
                   </label>
                 </div>
                 <div className="relative">
@@ -206,16 +210,16 @@ export default function LoginPage() {
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                 ) : (
-                  "Initialize Connection"
+                  "Login"
                 )}
               </button>
             </form>
 
             <div className="mt-8 text-center">
               <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-text-main/40">
-                New Unit?{" "}
+                Don't have an account?{" "}
                 <Link to="/signup" className="text-primary hover:underline">
-                  Register Neural Path
+                  Sign Up
                 </Link>
               </p>
             </div>

@@ -9,6 +9,7 @@ export interface Movie {
   first_air_date?: string;
   overview: string;
   genre_ids?: number[];
+  genres?: { id: number; name: string }[];
   media_type?: string;
   popularity?: number;
   runtime?: number;

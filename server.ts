@@ -1,7 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 
@@ -18,32 +17,11 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
-  // MongoDB Connection (Lazy)
-  let dbConnected = false;
-  const connectDB = async () => {
-    if (dbConnected) return;
-    try {
-      const uri = process.env.MONGODB_URI;
-      if (!uri) {
-        console.error("❌ ERROR: MONGODB_URI is missing from your .env file.");
-        return;
-      }
-      await mongoose.connect(uri);
-      dbConnected = true;
-      console.log("✅ Connected to MongoDB established successfully.");
-    } catch (err) {
-      console.error(
-        "❌ MongoDB connection error. Check your network or credentials:",
-        err,
-      );
-    }
-  };
-
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",
-      database: dbConnected ? "connected" : "disconnected",
+      database: "not_applicable",
     });
   });
 
@@ -152,7 +130,6 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    connectDB(); // Attempt initial connection
   });
 }
 

@@ -89,7 +89,7 @@ export default function SearchResults({
                     </span>
                     <div className="flex items-center gap-0.5 text-gold text-[10px] font-bold">
                       <Star className="w-2.5 h-2.5 fill-current" />
-                      {movie.vote_average.toFixed(1)}
+                      {(movie.vote_average ?? 0).toFixed(1)}
                     </div>
                   </div>
                 </div>

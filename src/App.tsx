@@ -14,7 +14,7 @@ import {
 import { cn } from "./lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import Navbar from "./components/layout/Navbar";
-import Footer from "./components/layout/Footer";
+import LayoutFooter from "./components/layout/LayoutFooter";
 import Sidebar from "./components/layout/Sidebar";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Movie } from "./types";
@@ -44,28 +44,9 @@ import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import WelcomeMessage from "./components/layout/WelcomeMessage";
 import { ThemeProvider } from "./lib/ThemeContext";
-import { TMDB_CONFIG } from "./constants";
+import { TMDB_CONFIG, GENRES, LANGUAGES } from "./constants";
 import { useTheme } from "./lib/ThemeContext";
-
-// TMDB ID Map
-const GENRES = [
-  { id: 28, name: "Action" },
-  { id: 878, name: "Sci-Fi" },
-  { id: 18, name: "Drama" },
-  { id: 27, name: "Horror" },
-  { id: 35, name: "Comedy" },
-  { id: 53, name: "Thriller" },
-];
-
-const LANGUAGES = [
-  { code: "en", name: "English" },
-  { code: "ko", name: "Korean" },
-  { code: "ja", name: "Japanese" },
-  { code: "hi", name: "Hindi" },
-  { code: "es", name: "Spanish" },
-  { code: "fr", name: "French" },
-  { code: "zh", name: "Chinese" },
-];
+import CustomDropdown from "./components/layout/CustomDropdown";
 
 const MOVIE_FEEDS = {
   trending: {
@@ -118,10 +99,11 @@ function Home() {
   const [trending, setTrending] = useState<Movie[]>([]);
   const [popular, setPopular] = useState<Movie[]>([]);
   const [discover, setDiscover] = useState<Movie[]>([]);
+  const [recommendationReason, setRecommendationReason] = useState<string>("");
   const [popularAnime, setPopularAnime] = useState<Movie[]>([]); // New state for popular anime
   const [popularKoreans, setPopularKoreans] = useState<Movie[]>([]); // New state for popular koreans
   const [isDiscovering, setIsDiscovering] = useState(false);
-  const [discoverGenre, setDiscoverGenre] = useState(GENRES[0]);
+  const [discoverGenres, setDiscoverGenres] = useState([GENRES[0], GENRES[1]]);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
   const { theme } = useTheme();
@@ -144,48 +126,78 @@ function Home() {
     }
   };
 
+  const getDaysOld = (dateString: string | undefined) => {
+    if (!dateString) return 30; // Default to 30 days old if no date
+    const diff = Date.now() - new Date(dateString).getTime();
+    return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  const calculateWeightedScore = (item: any, type: "watchlist" | "favorite") => {
+    const baseWeight = type === "favorite" ? 3.0 : 1.0;
+    const daysOld = getDaysOld(item.addedAt);
+    const decayConstant = 30; // 30-day half-life
+    return baseWeight * Math.pow(0.5, daysOld / decayConstant);
+  };
+
   const refreshDiscoverGems = useCallback(async (isInitial = false) => {
     if (!isInitial) setIsDiscovering(true);
+    
+    const GENRE_PAIRS = [
+      [878, 16], // Sci-Fi & Animation
+      [28, 35],  // Action & Comedy
+      [27, 53],  // Horror & Thriller
+      [10749, 35], // Romance & Comedy
+      [12, 14],  // Adventure & Fantasy
+      [80, 9648], // Crime & Mystery
+      [28, 878], // Action & Sci-Fi
+      [18, 36], // Drama & History
+    ];
+
+    const fetchDualGenreFallback = async () => {
+      const pair = GENRE_PAIRS[Math.floor(Math.random() * GENRE_PAIRS.length)];
+      const g1 = GENRES.find(g => g.id === pair[0]) || GENRES[0];
+      const g2 = GENRES.find(g => g.id === pair[1]) || GENRES[1];
+      setDiscoverGenres([g1, g2]);
+      setRecommendationReason(`Recommended because you enjoy ${g1.name} and ${g2.name} movies.`);
+      const endpoint = `discover/movie?with_genres=${g1.id},${g2.id}&sort_by=vote_average.desc&vote_count.gte=500`;
+      return await fetchMovies(endpoint);
+    };
+
     try {
-      const watchlist = JSON.parse(
-        localStorage.getItem("adnflix_watchlist") || "[]",
-      );
-      const favorites = JSON.parse(
-        localStorage.getItem("adnflix_favorites") || "[]",
-      );
-      const allSaved = [...watchlist, ...favorites];
-
-      let targetGenre = GENRES[Math.floor(Math.random() * GENRES.length)];
-
-      if (allSaved.length > 0) {
-        const genreCounts: Record<number, number> = {};
-        allSaved.forEach((m: any) => {
-          if (m.genre_ids) {
-            m.genre_ids.forEach((id: number) => {
-              genreCounts[id] = (genreCounts[id] || 0) + 1;
-            });
-          }
-        });
-
-        const topGenre = GENRES.map((g) => ({
-          ...g,
-          count: genreCounts[g.id] || 0,
-        })).sort((a, b) => b.count - a.count)[0];
-
-        if (topGenre.count > 0) targetGenre = topGenre;
+      const token = localStorage.getItem("adnflix_token");
+      if (!token) {
+        // Fallback for non-logged in users: dual genres
+        const data = await fetchDualGenreFallback();
+        setDiscover(data.results?.slice(0, 4) || []);
+        return;
       }
 
-      setDiscoverGenre(targetGenre);
-      // "Hidden Gems" Logic: High rating (>= 7), but lower vote counts (500-3000)
-      // to avoid just showing the most famous blockbusters.
-      const endpoint = `discover/movie?with_genres=${targetGenre.id}&sort_by=vote_average.desc&vote_count.gte=500&vote_count.lte=3500`;
-      const data = await fetchMovies(endpoint);
-      setDiscover(data.results?.slice(0, 4) || []);
+      const res = await fetch("http://127.0.0.1:5000/api/user/recommendations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (data.recommendations && data.recommendations.length > 0) {
+        setDiscover(data.recommendations);
+        if (data.topGenres && data.topGenres.length > 0) {
+          const mainGenreId = data.topGenres[0];
+          const secondGenreId = data.topGenres.length > 1 ? data.topGenres[1] : (GENRES.find(g => g.id !== mainGenreId)?.id || GENRES[1].id);
+          const g1 = GENRES.find((g) => g.id === mainGenreId) || { id: mainGenreId, name: "Custom" };
+          const g2 = GENRES.find((g) => g.id === secondGenreId) || { id: secondGenreId, name: "Custom" };
+          setDiscoverGenres([g1, g2]);
+          setRecommendationReason(`Tailored recommendations based on your unique film DNA.`);
+        } else {
+          setDiscoverGenres([GENRES[0], GENRES[1]]);
+        }
+      } else {
+        // Fallback if no recommendations yet (new user)
+        const fallbackData = await fetchDualGenreFallback();
+        setDiscover(fallbackData.results?.slice(0, 4) || []);
+      }
     } catch (err) {
       console.error("Intelligence Scan Failed:", err);
     } finally {
       if (!isInitial) {
-        // Artificial delay for the "processing" feel
         setTimeout(() => setIsDiscovering(false), 1500);
       }
     }
@@ -295,32 +307,37 @@ function Home() {
 
       <main className="max-w-screen-2xl mx-auto px-4 md:px-8 mt-6 md:mt-12 relative z-20">
         {/* Trending Section */}
-        <section className="mb-12 md:mb-24">
-          <div className="flex items-center justify-between mb-6 md:mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(229,9,20,0.5)]" />
-              <h2 className="text-3xl font-bold tracking-tight uppercase leading-none">
-                Trending locally on{" "}
-                <span className="text-primary italic">ADNFLIX</span>
-              </h2>
+        <section className="mb-16 md:mb-32">
+          <div className="flex items-center justify-between mb-8 md:mb-12">
+            <div className="flex items-center gap-4">
+              <div className="w-2 h-10 bg-primary rounded-full shadow-[0_0_25px_rgba(229,9,20,0.4)]" />
+              <div>
+                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
+                  Global <span className="text-primary">Trending</span>
+                </h2>
+                <p className="text-[10px] font-bold text-text-main/30 uppercase tracking-[0.3em] mt-2 ml-1">
+                  What ADNFLIX is watching right now
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 md:gap-4">
+            <div className="flex items-center gap-4">
               <RouterLink
                 to="/trending"
-                className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] hover:underline flex items-center gap-2 bg-primary/5 px-3 py-2 md:px-6 md:py-3 rounded-full border border-primary/20 shadow-skeuo-sm transition-all hover:shadow-skeuo-md active:translate-y-0.5 cursor-pointer whitespace-nowrap"
+                className="hidden md:flex items-center gap-4 px-8 py-4 rounded-2xl bg-card-bg border border-text-main/10 text-text-main/60 font-black text-[10px] uppercase tracking-[0.2em] shadow-skeuo-sm hover:border-primary/30 hover:text-primary transition-all cursor-pointer"
               >
-                Explore More
+                Full Index
+                <ChevronRight className="w-4 h-4" />
               </RouterLink>
               <div className="flex gap-2">
                 <button
                   onClick={() => scroll("left")}
-                  className="p-2.5 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
+                  className="p-3 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
                 >
                   <ChevronLeft className="w-5 h-5 text-text-main/40 group-hover:text-primary" />
                 </button>
                 <button
                   onClick={() => scroll("right")}
-                  className="p-2.5 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
+                  className="p-3 rounded-full bg-card-bg border border-text-main/10 hover:border-primary/50 transition-all shadow-skeuo-sm active:shadow-skeuo-inner group cursor-pointer"
                 >
                   <ChevronRight className="w-5 h-5 text-text-main/40 group-hover:text-primary" />
                 </button>
@@ -329,12 +346,12 @@ function Home() {
           </div>
           <div
             ref={trendingRef}
-            className="flex overflow-x-auto gap-6 pb-6 scrollbar-hide snap-x px-1"
+            className="flex overflow-x-auto gap-8 pb-12 scrollbar-hide snap-x px-1 -mx-4 md:mx-0"
           >
-            {trending.slice(1, 13).map((movie) => (
+            {trending.slice(1, 15).map((movie) => (
               <div
                 key={movie.id}
-                className="min-w-[160px] sm:min-w-[200px] md:min-w-[240px] snap-start"
+                className="min-w-[200px] sm:min-w-[240px] md:min-w-[280px] snap-start"
               >
                 <MovieCard movie={movie} />
               </div>
@@ -344,33 +361,71 @@ function Home() {
 
         {/* Genre Showcase */}
         <section className="mb-12 md:mb-24">
-          <div className="flex items-center gap-3 mb-6 md:mb-8">
-            <div className="w-1.5 h-8 bg-gold rounded-full shadow-[0_0_15px_rgba(212,175,55,0.3)]" />
-            <h2 className="text-3xl font-bold tracking-tight uppercase leading-none">
-              Curated Genres
-            </h2>
+          <div className="flex items-center justify-between mb-8 md:mb-12">
+            <div className="flex items-center gap-4">
+              <div className="w-2 h-10 bg-primary rounded-full shadow-[0_0_25px_rgba(229,9,20,0.4)]" />
+              <div>
+                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
+                  Curated Categories
+                </h2>
+                <p className="text-[10px] font-bold text-text-main/30 uppercase tracking-[0.3em] mt-2 ml-1">
+                  Explore the ADNFLIX cinematic library
+                </p>
+              </div>
+            </div>
+            <RouterLink
+              to="/genres"
+              className="group flex items-center gap-4 px-8 py-4 rounded-2xl bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-[1.05] active:scale-95 transition-all cursor-pointer"
+            >
+              All Genres
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </RouterLink>
           </div>
-          <div className="flex flex-wrap gap-4">
-            {GENRES.map((genre) => (
-              <button
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {GENRES.slice(0, 11).map((genre, idx) => (
+              <motion.button
                 key={genre.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.03 }}
                 onClick={() =>
                   navigate(`/genre/${genre.id}?name=${genre.name}`)
                 }
-                className="px-8 py-5 rounded-2xl bg-card-bg shadow-skeuo-sm border border-text-main/10 hover:shadow-skeuo-lg hover:border-primary/30 transition-all group flex items-center gap-3 active:translate-y-0.5 cursor-pointer"
+                className={cn(
+                  "relative group px-6 py-8 rounded-3xl overflow-hidden transition-all duration-500 border border-white/5 active:scale-95 cursor-pointer shadow-skeuo-sm hover:shadow-skeuo-lg",
+                  theme === "dark" ? "bg-card-bg/40" : "bg-white/40"
+                )}
               >
-                <Film className="w-4 h-4 text-text-main/20 group-hover:text-primary transition-colors" />
-                <span className="font-bold text-sm tracking-widest uppercase">
-                  {genre.name}
-                </span>
-              </button>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10 flex flex-col items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-bg-main/50 flex items-center justify-center group-hover:bg-primary/20 transition-colors duration-500 shadow-inner">
+                    <Film className="w-6 h-6 text-text-main/20 group-hover:text-primary transition-colors duration-500" />
+                  </div>
+                  <span className="font-black text-[11px] tracking-[0.2em] uppercase text-text-main/50 group-hover:text-text-main transition-colors duration-500 text-center">
+                    {genre.name}
+                  </span>
+                </div>
+              </motion.button>
             ))}
-            <RouterLink
-              to="/genres"
-              className="px-8 py-5 rounded-2xl bg-primary/10 border border-primary/20 text-primary font-bold shadow-lg shadow-primary/5 hover:scale-105 transition-transform flex items-center gap-2 cursor-pointer"
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 11 * 0.03 }}
+              onClick={() => navigate("/genres")}
+              className={cn(
+                "relative group px-6 py-8 rounded-3xl overflow-hidden transition-all duration-500 border border-primary/20 active:scale-95 cursor-pointer bg-primary/5 hover:bg-primary/10 shadow-skeuo-sm",
+              )}
             >
-              ALL CATEGORIES <ChevronRight className="w-4 h-4" />
-            </RouterLink>
+              <div className="relative z-10 flex flex-col items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors duration-500">
+                  <ArrowRight className="w-6 h-6 text-primary" />
+                </div>
+                <span className="font-black text-[11px] tracking-[0.2em] uppercase text-primary text-center">
+                  More Genres
+                </span>
+              </div>
+            </motion.button>
           </div>
         </section>
 
@@ -386,48 +441,102 @@ function Home() {
           >
             <div
               className={cn(
-                "backdrop-blur-xl p-6 md:p-16 rounded-lg text-center relative overflow-hidden",
-                theme === "dark" ? "bg-card-bg/50" : "bg-white/40",
+                "backdrop-blur-3xl p-8 md:p-20 rounded-2xl text-center relative overflow-hidden border border-white/10",
+                theme === "dark" ? "bg-card-bg/40" : "bg-white/30",
               )}
             >
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                <Sparkles className="w-64 h-64 text-gold" />
+              {/* Animated background element */}
+              <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+              <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-gold/5 rounded-full blur-[120px] pointer-events-none" />
+
+              <div className="absolute top-0 right-0 p-8 opacity-10">
+                <Sparkles className="w-64 h-64 text-gold animate-pulse" />
               </div>
+              
               <div className="relative z-10 w-full">
-                <div className="w-20 h-20 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(229,9,20,0.2)]">
-                  <Globe className="w-10 h-10 text-primary" />
-                </div>
-                <h2 className="text-4xl md:text-5xl font-bold mb-4 tracking-tighter uppercase">
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  whileInView={{ scale: 1, opacity: 1 }}
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-primary/30 to-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-8 shadow-[0_0_50px_rgba(229,9,20,0.3)] relative group"
+                >
+                  <div className="absolute inset-0 rounded-full animate-ping bg-primary/20" />
+                  <Globe className="w-12 h-12 text-primary group-hover:rotate-12 transition-transform duration-500" />
+                </motion.div>
+
+                <h2 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter uppercase italic bg-gradient-to-b from-text-main to-text-main/40 bg-clip-text text-transparent">
                   ADNFLIX Intelligence
                 </h2>
-                <p className="text-text-main/50 max-w-2xl mx-auto mb-10 text-lg h-20 flex items-center justify-center">
-                  {isDiscovering
-                    ? "Analyzing neural pathways and cinematic sequences..."
-                    : `Discovery engine complete. We've identified hidden ${discoverGenre.name} gems tailored to your unique film DNA.`}
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto relative">
+
+                <div className="max-w-2xl mx-auto mb-12 min-h-[100px] flex flex-col items-center justify-center">
+                  <p className="text-text-main/60 text-xl font-medium tracking-tight">
+                    {isDiscovering
+                      ? "Analyzing neural pathways and cinematic sequences..."
+                      : `Discovery engine complete. We've identified hidden ${discoverGenres[0]?.name} and ${discoverGenres[1]?.name} gems.`}
+                  </p>
+                  
+                  {!isDiscovering && (
+                    <motion.div 
+                      initial={{ y: 10, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      className="mt-6 px-6 py-2 rounded-full bg-primary/5 border border-primary/10 text-primary text-xs font-bold uppercase tracking-[0.3em] flex items-center gap-3 backdrop-blur-md"
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                      {recommendationReason}
+                    </motion.div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto relative px-4">
                   <AnimatePresence>
                     {isDiscovering && (
                       <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 z-30 flex items-center justify-center bg-bg-main/60 backdrop-blur-md rounded-xl border border-primary/20"
+                        className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-bg-main/40 backdrop-blur-xl rounded-2xl border border-primary/10"
                       >
-                        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin shadow-[0_0_20px_rgba(229,9,20,0.3)]" />
+                        <div className="relative w-20 h-20 mb-4">
+                          <div className="absolute inset-0 border-4 border-primary/10 rounded-full" />
+                          <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-[0_0_30px_rgba(229,9,20,0.4)]" />
+                        </div>
+                        <span className="text-primary text-[10px] font-bold uppercase tracking-[0.5em] animate-pulse">Scanning DNA</span>
                       </motion.div>
                     )}
                   </AnimatePresence>
-                  {discover.slice(0, 4).map((movie) => (
-                    <MovieCard key={movie.id} movie={movie} />
+                  
+                  {discover.slice(0, 4).map((movie, idx) => (
+                    <motion.div
+                      key={movie.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                    >
+                      <MovieCard movie={movie} />
+                    </motion.div>
                   ))}
                 </div>
+
                 <button
                   onClick={() => refreshDiscoverGems()}
                   disabled={isDiscovering}
-                  className="mt-12 px-10 py-4 rounded-full bg-primary text-white font-bold uppercase tracking-[0.2em] shadow-lg shadow-primary/20 hover:scale-105 transition-all text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mt-16 group relative px-12 py-5 rounded-full overflow-hidden transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
-                  {isDiscovering ? "Neural Scanning..." : "Re-Scan Film DNA"}
+                  <div className="absolute inset-0 bg-primary group-hover:bg-primary-dark transition-colors" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                  <span className="relative z-10 text-white font-black uppercase tracking-[0.3em] text-[10px] flex items-center gap-3">
+                    {isDiscovering ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        Neural Scanning...
+                      </>
+                    ) : (
+                      <>
+                        Re-Scan Film DNA
+                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </span>
+                  <div className="absolute inset-0 shadow-[0_0_40px_rgba(229,9,20,0.4)] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
               </div>
             </div>
@@ -435,68 +544,86 @@ function Home() {
         </section>
 
         {/* Popular Section */}
-        <section className="mb-12 md:mb-24">
-          <div className="flex items-center justify-between mb-6 md:mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(229,9,20,0.5)]" />
-              <h2 className="text-3xl font-bold tracking-tight uppercase leading-none">
-                Popular Hits
-              </h2>
+        <section className="mb-16 md:mb-32">
+          <div className="flex items-center justify-between mb-8 md:mb-12">
+            <div className="flex items-center gap-4">
+              <div className="w-2 h-10 bg-gold rounded-full shadow-[0_0_25px_rgba(212,175,55,0.3)]" />
+              <div>
+                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
+                  Popular <span className="text-gold">Hits</span>
+                </h2>
+                <p className="text-[10px] font-bold text-text-main/30 uppercase tracking-[0.3em] mt-2 ml-1">
+                  Highest rated masterpieces across the platform
+                </p>
+              </div>
             </div>
             <RouterLink
               to="/popular"
-              className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] hover:underline flex items-center gap-2 bg-primary/5 px-6 py-3 rounded-full border border-primary/20 shadow-skeuo-sm transition-all hover:shadow-skeuo-md active:translate-y-0.5 cursor-pointer"
+              className="group flex items-center gap-4 px-8 py-4 rounded-2xl bg-card-bg border border-text-main/10 text-text-main/60 font-black text-[10px] uppercase tracking-[0.2em] shadow-skeuo-sm hover:border-primary/30 hover:text-primary transition-all cursor-pointer"
             >
-              Explore More
+              Explore All
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </RouterLink>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-8">
             {popular.slice(0, 18).map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
           </div>
         </section>
 
-        {/* Popular Anime Section - NEW */}
-        <section className="mb-12 md:mb-24">
-          <div className="flex items-center justify-between mb-6 md:mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(229,9,20,0.5)]" />
-              <h2 className="text-3xl font-bold tracking-tight uppercase leading-none">
-                Popular Anime
-              </h2>
+        {/* Popular Anime Section */}
+        <section className="mb-16 md:mb-32">
+          <div className="flex items-center justify-between mb-8 md:mb-12">
+            <div className="flex items-center gap-4">
+              <div className="w-2 h-10 bg-primary rounded-full shadow-[0_0_25px_rgba(229,9,20,0.4)]" />
+              <div>
+                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
+                  Popular <span className="text-primary">Anime</span>
+                </h2>
+                <p className="text-[10px] font-bold text-text-main/30 uppercase tracking-[0.3em] mt-2 ml-1">
+                  The most popular animation hits on ADNFLIX
+                </p>
+              </div>
             </div>
             <RouterLink
               to="/popular-anime"
-              className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] hover:underline flex items-center gap-2 bg-primary/5 px-6 py-3 rounded-full border border-primary/20 shadow-skeuo-sm transition-all hover:shadow-skeuo-md active:translate-y-0.5 cursor-pointer"
+              className="group flex items-center gap-4 px-8 py-4 rounded-2xl bg-card-bg border border-text-main/10 text-text-main/60 font-black text-[10px] uppercase tracking-[0.2em] shadow-skeuo-sm hover:border-primary/30 hover:text-primary transition-all cursor-pointer"
             >
-              Explore More
+              Anime Collection
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </RouterLink>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-8">
             {popularAnime.slice(0, 18).map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
           </div>
         </section>
 
-        {/* Popular Korean Section - NEW */}
-        <section className="mb-12 md:mb-24">
-          <div className="flex items-center justify-between mb-6 md:mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(229,9,20,0.5)]" />
-              <h2 className="text-3xl font-bold tracking-tight uppercase leading-none">
-                K-Drama & Cinema
-              </h2>
+        {/* Popular Korean Section */}
+        <section className="mb-16 md:mb-32">
+          <div className="flex items-center justify-between mb-8 md:mb-12">
+            <div className="flex items-center gap-4">
+              <div className="w-2 h-10 bg-primary rounded-full shadow-[0_0_25px_rgba(229,9,20,0.4)]" />
+              <div>
+                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
+                  K-Drama <span className="text-primary">& Cinema</span>
+                </h2>
+                <p className="text-[10px] font-bold text-text-main/30 uppercase tracking-[0.3em] mt-2 ml-1">
+                  Experience the wave of Korean storytelling
+                </p>
+              </div>
             </div>
             <RouterLink
               to="/popular-korean"
-              className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] hover:underline flex items-center gap-2 bg-primary/5 px-6 py-3 rounded-full border border-primary/20 shadow-skeuo-sm transition-all hover:shadow-skeuo-md active:translate-y-0.5 cursor-pointer"
+              className="group flex items-center gap-4 px-8 py-4 rounded-2xl bg-card-bg border border-text-main/10 text-text-main/60 font-black text-[10px] uppercase tracking-[0.2em] shadow-skeuo-sm hover:border-primary/30 hover:text-primary transition-all cursor-pointer"
             >
-              Explore More
+              Korean Library
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </RouterLink>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-8">
             {popularKoreans.slice(0, 18).map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
@@ -660,20 +787,16 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
             ))}
           </div>
 
-          <div className="relative min-w-[220px]">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full bg-card-bg border border-text-main/10 rounded-xl px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-text-main/60 outline-none focus:border-primary/50 transition-all cursor-pointer appearance-none"
-            >
-              <option value="popularity">Sort by: Popularity</option>
-              <option value="rating">Sort by: IMDb Score</option>
-              <option value="date">Sort by: Release Date</option>
-            </select>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-              <ChevronRight className="w-4 h-4 text-text-main/20 rotate-90" />
-            </div>
-          </div>
+          <CustomDropdown
+            options={[
+              { id: "popularity", name: "Sort by: Popularity" },
+              { id: "rating", name: "Sort by: IMDb Score" },
+              { id: "date", name: "Sort by: Release Date" },
+            ]}
+            value={sortBy}
+            onChange={(val) => setSortBy(val as any)}
+            className="min-w-[220px]"
+          />
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
@@ -707,6 +830,7 @@ function MovieFeedPage({ feed }: { feed: keyof typeof MOVIE_FEEDS }) {
 
 function GenresPage() {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [selectedGenre, setSelectedGenre] = useState(GENRES[0].id.toString());
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 47 }, (_, index) =>
@@ -724,60 +848,110 @@ function GenresPage() {
   };
 
   return (
-    <div className="min-h-screen pt-32 pb-20 px-4 md:px-12">
-      <div className="max-w-screen-2xl mx-auto">
-        <header className="mb-10">
-          <div className="flex items-center gap-3 mb-2">
-            <Film className="w-6 h-6 text-primary" />
-            <h1 className="text-4xl font-bold tracking-tight uppercase">
-              Genres
+    <div className="min-h-screen pt-40 pb-20 px-4 md:px-12 relative overflow-hidden">
+      {/* Background Decorations */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gold/5 rounded-full blur-[120px] -z-10" />
+
+      <div className="max-w-screen-xl mx-auto">
+        <header className="mb-16 text-center md:text-left">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center justify-center md:justify-start gap-4 mb-4"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-lg shadow-primary/5">
+              <Film className="w-6 h-6 text-primary" />
+            </div>
+            <h1 className="text-5xl md:text-6xl font-black tracking-tighter uppercase italic">
+              Explore <span className="text-primary">Genres</span>
             </h1>
-          </div>
-          <p className="text-text-main/40 uppercase tracking-widest text-[10px] font-bold">
-            Choose a genre and year for its ADNFLIX collection
-          </p>
+          </motion.div>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="text-text-main/30 uppercase tracking-[0.4em] text-[10px] font-bold ml-1"
+          >
+            Precision filtering for your next cinematic experience
+          </motion.p>
         </header>
 
-        <div className="skeuo-card p-6 md:p-8 flex flex-col md:flex-row gap-4 md:items-center">
-          <select
-            value={selectedGenre}
-            onChange={(event) => setSelectedGenre(event.target.value)}
-            className="w-full md:max-w-sm rounded-xl bg-bg-main border border-text-main/10 px-4 py-3 text-sm font-bold text-text-main outline-none focus:border-primary/50"
-          >
-            {GENRES.map((genre) => (
-              <option key={genre.id} value={genre.id}>
-                {genre.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedYear}
-            onChange={(event) => setSelectedYear(event.target.value)}
-            className="w-full md:max-w-40 rounded-xl bg-bg-main border border-text-main/10 px-4 py-3 text-sm font-bold text-text-main outline-none focus:border-primary/50"
-          >
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedLanguage}
-            onChange={(event) => setSelectedLanguage(event.target.value)}
-            className="w-full md:max-w-40 rounded-xl bg-bg-main border border-text-main/10 px-4 py-3 text-sm font-bold text-text-main outline-none focus:border-primary/50"
-          >
-            {LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.name}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={goToGenre}
-            className="px-8 py-3 rounded-xl bg-primary text-white text-xs font-bold uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-105 transition-transform cursor-pointer"
-          >
-            Browse Genre
-          </button>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={cn(
+            "p-8 md:p-12 rounded-[2.5rem] border backdrop-blur-3xl shadow-2xl relative",
+            theme === "dark" ? "bg-card-bg/40 border-white/5" : "bg-white/40 border-black/5"
+          )}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-end">
+            <CustomDropdown
+              label="Select Genre"
+              options={GENRES}
+              value={selectedGenre}
+              onChange={(val) => setSelectedGenre(val.toString())}
+            />
+            <CustomDropdown
+              label="Release Year"
+              options={years.map((y) => ({ id: y, name: y }))}
+              value={selectedYear}
+              onChange={(val) => setSelectedYear(val.toString())}
+            />
+            <CustomDropdown
+              label="Original Language"
+              options={LANGUAGES.map((l) => ({ id: l.code, name: l.name }))}
+              value={selectedLanguage}
+              onChange={(val) => setSelectedLanguage(val.toString())}
+            />
+            <button
+              onClick={goToGenre}
+              className="group relative h-[60px] rounded-2xl overflow-hidden transition-all duration-500 hover:scale-[1.02] active:scale-95 cursor-pointer shadow-xl shadow-primary/20"
+            >
+              <div className="absolute inset-0 bg-primary group-hover:bg-primary-dark transition-colors" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent" />
+              <span className="relative z-10 text-white text-xs font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3">
+                Open Index
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </span>
+            </button>
+          </div>
+
+          <div className="mt-12 pt-8 border-t border-white/5 flex flex-wrap gap-8 justify-center md:justify-start">
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span className="text-[10px] font-bold text-text-main/20 uppercase tracking-widest">Global TMDB Database</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span className="text-[10px] font-bold text-text-main/20 uppercase tracking-widest">AI Ranked Discovery</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span className="text-[10px] font-bold text-text-main/20 uppercase tracking-widest">HD Metadata</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Quick Tips */}
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[
+            { title: "DNA Search", desc: "Filter by genre to match your cinematic sequence." },
+            { title: "Retro Mode", desc: "Browse classics by selecting older release years." },
+            { title: "Global Cinema", desc: "Switch languages to explore international masterpieces." }
+          ].map((tip, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 + (i * 0.1) }}
+              className="p-6 rounded-2xl border border-white/5 bg-white/2 hover:border-primary/20 transition-colors"
+            >
+              <h3 className="text-primary text-[10px] font-black uppercase tracking-widest mb-2">{tip.title}</h3>
+              <p className="text-text-main/40 text-xs leading-relaxed">{tip.desc}</p>
+            </motion.div>
+          ))}
         </div>
       </div>
     </div>
@@ -966,7 +1140,7 @@ export default function App() {
             </AnimatePresence>
 
             {/* Footer */}
-            <Footer />
+            <LayoutFooter />
           </motion.div>
         </div>
 

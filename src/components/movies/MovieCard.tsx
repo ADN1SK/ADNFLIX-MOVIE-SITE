@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { Star, Plus, Heart, ArrowRight, Check } from "lucide-react";
 import { Movie } from "@/src/types";
 import { TMDB_CONFIG } from "@/src/constants";
+import { GENRES } from "@/src/constants";
 import { cn } from "@/src/lib/utils";
 import { Link } from "react-router-dom";
 import { decodeJwtPayload, getAuthToken } from "@/src/lib/authSession";
@@ -105,6 +106,7 @@ export default function MovieCard({
             tmdb_movie_id: movie.id,
             movie_title: movie.title || (movie as any).name,
             type: "watchlist",
+            genre_ids: movie.genre_ids,
           }),
         });
         setIsInWatchlist(true);
@@ -146,6 +148,7 @@ export default function MovieCard({
             tmdb_movie_id: movie.id,
             movie_title: movie.title || (movie as any).name,
             type: "favorite",
+            genre_ids: movie.genre_ids,
           }),
         });
         setIsInFavorites(true);
@@ -239,11 +242,20 @@ export default function MovieCard({
         <h3 className="line-clamp-2 text-sm font-semibold mb-1 text-text-main">
           {movie.title || (movie as any).name || "Untitled"}
         </h3>
+        {movie.genre_ids && (
+          <p className="text-[10px] text-text-main/50 font-medium mb-1 truncate">
+            {movie.genre_ids
+              .slice(0, 2)
+              .map((id) => GENRES.find((g) => g.id === id)?.name)
+              .filter(Boolean)
+              .join(", ")}
+          </p>
+        )}
 
         <div className="flex items-center gap-1.5">
           <Star className={cn("w-3.5 h-3.5 fill-current", ratingColor)} />
           <span className={cn("text-xs font-bold font-mono", ratingColor)}>
-            {movie.vote_average.toFixed(1)}
+            {(movie.vote_average ?? 0).toFixed(1)}
           </span>
           <span className="text-[10px] text-text-main/40 font-mono ml-auto">
             {
@@ -293,7 +305,7 @@ export default function MovieCard({
         >
           <Star className={cn("w-3 h-3 fill-current", ratingColor)} />
           <span className={cn("text-[10px] font-bold", ratingColor)}>
-            {movie.vote_average.toFixed(1)}
+            {(movie.vote_average ?? 0).toFixed(1)}
           </span>
         </div>
       </div>

@@ -18,13 +18,19 @@ import {
   Sun,
   Menu,
   X,
+  Settings,
+  LogOut,
+  Sliders,
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { getAuthToken, clearUserSession } from "@/src/lib/authSession";
 import SearchResults from "../search/SearchResults";
 import { Movie } from "@/src/types";
 
 import { useTheme } from "@/src/lib/ThemeContext";
+
+import PreferencesModal from "./PreferencesModal";
 
 export default function Navbar({ 
   onToggleSidebar, 
@@ -40,7 +46,35 @@ export default function Navbar({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const settingsRef = React.useRef<HTMLDivElement>(null);
+  const token = getAuthToken();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSignOut = () => {
+    clearUserSession();
+    setIsSettingsOpen(false);
+    navigate("/");
+    window.dispatchEvent(
+      new CustomEvent("adnflix_toast", {
+        detail: {
+          message: "You have successfully signed out.",
+          movieTitle: "Goodbye!",
+        },
+      }),
+    );
+  };
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
@@ -75,6 +109,9 @@ export default function Navbar({
   };
 
   const isDashboard = location.pathname === "/dashboard";
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
+
+  if (isAuthPage) return null;
   
   const isEditableTarget = (target: EventTarget | null) =>
     target instanceof HTMLInputElement ||
@@ -189,7 +226,7 @@ export default function Navbar({
     >
       <div className="max-w-screen-2xl mx-auto w-full flex items-center gap-4 md:gap-5">
         {/* Sidebar Toggle */}
-        <div className="flex items-center">
+        <div className={cn("flex items-center", isSearchExpanded && "hidden md:flex")}>
           <button
             type="button"
             onClick={onToggleSidebar}
@@ -427,21 +464,90 @@ export default function Navbar({
 
           <div className="h-8 w-[1px] bg-text-main/10 hidden md:block mx-1" />
 
-          <Link
-            to="/login"
-            className="flex items-center gap-2 group cursor-pointer"
-          >
-            <div
-              className={cn(
-                "w-10 h-10 rounded-full border flex items-center justify-center group-hover:border-primary/50 transition-colors shadow-skeuo-sm overflow-hidden",
-                "bg-card-bg border-text-main/10",
-              )}
-            >
-              <User className={cn("w-5 h-5", "text-text-main")} />
+          {token ? (
+            <div className="relative" ref={settingsRef}>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={cn(
+                  "w-10 h-10 rounded-full border flex items-center justify-center transition-colors shadow-skeuo-sm overflow-hidden group cursor-pointer",
+                  isSettingsOpen ? "border-primary shadow-skeuo-md" : "border-text-main/10 bg-card-bg hover:border-primary/50"
+                )}
+              >
+                <User className={cn("w-5 h-5 transition-colors", isSettingsOpen ? "text-primary" : "text-text-main")} />
+              </button>
+              
+              <AnimatePresence>
+                {isSettingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: "circOut" }}
+                    className={cn(
+                      "absolute right-0 mt-3 w-56 py-2 rounded-2xl border shadow-2xl backdrop-blur-3xl z-[200]",
+                      theme === "dark" ? "bg-card-bg/95 border-white/10" : "bg-white/95 border-black/10"
+                    )}
+                  >
+                    <div className="px-4 py-2 border-b border-text-main/10 mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-main/40">Account</p>
+                    </div>
+                    <div className="px-2 space-y-1">
+                      <Link
+                        to="/dashboard?tab=overview"
+                        onClick={() => setIsSettingsOpen(false)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-primary/10 text-text-main/70 hover:text-primary group"
+                      >
+                        <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
+                        <span className="text-sm font-bold tracking-tight">User Settings</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSettingsOpen(false);
+                          setIsPreferencesOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-primary/10 text-text-main/70 hover:text-primary group cursor-pointer"
+                      >
+                        <Sliders className="w-4 h-4" />
+                        <span className="text-sm font-bold tracking-tight">Preferences</span>
+                      </button>
+                      <div className="my-1 border-t border-text-main/5" />
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-red-500/10 text-text-main/70 hover:text-red-500 group cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span className="text-sm font-bold tracking-tight">Sign Out</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="flex items-center gap-2 group cursor-pointer"
+            >
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-full border flex items-center justify-center group-hover:border-primary/50 transition-colors shadow-skeuo-sm overflow-hidden",
+                  "bg-card-bg border-text-main/10",
+                )}
+              >
+                <User className={cn("w-5 h-5", "text-text-main")} />
+              </div>
+            </Link>
+          )}
         </div>
       </div>
+      
+      <PreferencesModal 
+        isOpen={isPreferencesOpen} 
+        onClose={() => setIsPreferencesOpen(false)} 
+      />
     </nav>
   );
 }

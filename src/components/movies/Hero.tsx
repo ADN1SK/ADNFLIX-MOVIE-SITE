@@ -105,8 +105,9 @@ export default function Hero({ movies }: HeroProps) {
           },
           body: JSON.stringify({
             tmdb_movie_id: movie.id,
-            movie_title: movie.title || (movie as any).name,
+            movie_title: movie.title,
             type: "watchlist",
+            genre_ids: movie.genre_ids,
           }),
         });
         setIsInWatchlist(true);
@@ -208,7 +209,7 @@ export default function Hero({ movies }: HeroProps) {
                   </div>
                   <div className="flex items-center h-5 gap-1 text-gold text-sm font-bold">
                     <Star className="w-4 h-4 fill-current" />
-                    <span>{movie.vote_average.toFixed(1)}</span>
+                    <span>{(movie.vote_average ?? 0).toFixed(1)}</span>
                   </div>
                   {mediaType === "tv" && (
                     <div className="flex items-center h-5 gap-1.5 px-2 py-0.5 rounded bg-white/5 border border-white/10 text-text-main/60 text-[10px] font-bold uppercase tracking-widest">

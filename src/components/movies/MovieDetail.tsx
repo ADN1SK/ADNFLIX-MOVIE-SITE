@@ -21,9 +21,10 @@ import {
   User,
   MessageSquare,
   Heart,
+  Film,
 } from "lucide-react";
 import { Movie, Cast } from "@/src/types";
-import { TMDB_CONFIG } from "@/src/constants";
+import { TMDB_CONFIG, GENRES } from "@/src/constants";
 import { formatCurrency, formatDate, cn } from "@/src/lib/utils";
 import { motion } from "motion/react";
 import MovieCard from "./MovieCard";
@@ -314,6 +315,7 @@ export default function MovieDetail() {
             tmdb_movie_id: movie.id,
             movie_title: movieTitle,
             type: "watchlist",
+            genre_ids: movie.genre_ids,
           }),
         });
         if (res.ok) {
@@ -366,6 +368,7 @@ export default function MovieDetail() {
             tmdb_movie_id: movie.id,
             movie_title: movieTitle,
             type: "favorite",
+            genre_ids: movie.genre_ids,
           }),
         });
         if (res.ok) {
@@ -558,7 +561,7 @@ export default function MovieDetail() {
             <div className="flex flex-wrap items-center gap-6 text-sm text-text-main/80 font-medium mb-8">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/30 text-gold">
                 <Star className="w-4 h-4 fill-current" />
-                <span>{movie.vote_average.toFixed(1)} IMDb Score</span>
+                <span>{(movie.vote_average ?? 0).toFixed(1)} IMDb Score</span>
               </div>
               {mediaType === "movie" ? (
                 <div className="flex items-center gap-2">
@@ -575,6 +578,17 @@ export default function MovieDetail() {
                 <Calendar className="w-4 h-4 text-primary" />
                 <span>{formatDate(releaseDate)}</span>
               </div>
+              {movie.genres && movie.genres.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Film className="w-4 h-4 text-primary" />
+                  <span>
+                    {movie.genres
+                      .slice(0, 3)
+                      .map((g: any) => g.name)
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
               {movie.homepage && (
                 <a
                   href={movie.homepage}
