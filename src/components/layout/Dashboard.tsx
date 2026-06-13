@@ -14,7 +14,7 @@ import {
   LayoutDashboard,
   LogIn,
   MessageSquare,
-  Settings,
+  Pencil,
   ShieldCheck,
   Star,
   User,
@@ -28,6 +28,7 @@ import {
 import MovieCard from "../movies/MovieCard";
 import type { Movie } from "@/src/types";
 import OverviewDashboard from "./OverviewDashboard";
+import AvatarSelectionModal from "./AvatarSelectionModal";
 
 const accountTabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -39,6 +40,9 @@ const accountTabs = [
 
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>("Cinema Enthusiast");
   const activeTab = searchParams.get("tab") || "overview";
 
   const setActiveTab = (tab: string) => {
@@ -80,12 +84,23 @@ export default function Dashboard() {
       setWatchlist([]);
       setFavorites([]);
       setReviews([]);
+      setHistory([]);
     } else {
       try {
+        const profileRes = await fetch("http://127.0.0.1:5000/api/auth/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          setAvatarUrl(profile.avatar_url);
+          setUserName(profile.name || "Cinema Enthusiast");
+        }
+
         const endpoints = [
           { type: "watchlist", url: "http://127.0.0.1:5000/api/user-movies/watchlist" },
           { type: "favorite", url: "http://127.0.0.1:5000/api/user-movies/favorite" },
           { type: "reviews", url: `http://127.0.0.1:5000/api/reviews/${userId}` },
+          { type: "history", url: "http://127.0.0.1:5000/api/history" },
         ];
 
         const results = await Promise.all(
@@ -94,6 +109,8 @@ export default function Dashboard() {
               headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) {
+              // History might be empty if no movies watched yet
+              if (endpoint.type === "history" && res.status === 404) return { type: "history", data: [] };
               throw new Error(`Failed to load ${endpoint.type}`);
             }
             const data = await res.json();
@@ -107,34 +124,33 @@ export default function Dashboard() {
           results.find((r) => r.type === "favorite")?.data || [];
         const reviewsData: ReviewItem[] =
           results.find((r) => r.type === "reviews")?.data || [];
+        const historyData: any[] =
+          results.find((r) => r.type === "history")?.data || [];
 
-        const fetchFullMovie = async (item: SavedListItem): Promise<Movie> => {
-          const res = await fetch(`http://127.0.0.1:5000/api/movies/movie/${item.tmdb_movie_id}`);
+        const fetchFullMovie = async (item: SavedListItem | any): Promise<Movie> => {
+          // If it's a history item, it has tmdb_movie_id
+          const tmdbId = item.tmdb_movie_id || item.tmdb_movie_id;
+          const res = await fetch(`http://127.0.0.1:5000/api/movies/movie/${tmdbId}`);
           if (!res.ok) {
-            throw new Error(`Failed to load movie ${item.tmdb_movie_id}`);
+            throw new Error(`Failed to load movie ${tmdbId}`);
           }
           return res.json();
         };
 
-        const [fullWatchlist, fullFavorites] = await Promise.all([
+        const [fullWatchlist, fullFavorites, fullHistory] = await Promise.all([
           Promise.all(watchlistData.map(fetchFullMovie)),
           Promise.all(favoritesData.map(fetchFullMovie)),
+          Promise.all(historyData.map(fetchFullMovie)),
         ]);
 
         setWatchlist(fullWatchlist);
         setFavorites(fullFavorites);
         setReviews(reviewsData);
+        setHistory(fullHistory);
       } catch (err) {
         console.error("Failed to load persistent data:", err);
       }
     }
-
-    // Still load non-persistent data from localStorage
-    setHistory(
-      JSON.parse(
-        localStorage.getItem("adnflix_history") || "[]",
-      ) as HistoryItem[],
-    );
   }, []);
 
   useEffect(() => {
@@ -155,9 +171,29 @@ export default function Dashboard() {
     [watchlist, reviews, history],
   );
 
-  const clearHistory = () => {
-    localStorage.removeItem("adnflix_history");
-    window.dispatchEvent(new Event("adnflix_sync"));
+  const clearHistory = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      await fetch("http://127.0.0.1:5000/api/history", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      window.dispatchEvent(new Event("adnflix_sync"));
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "History cleared successfully" },
+        }),
+      );
+    } catch (err) {
+      console.error("Failed to clear history", err);
+      window.dispatchEvent(
+        new CustomEvent("adnflix_toast", {
+          detail: { message: "Error clearing history" },
+        }),
+      );
+    }
   };
 
   const handleDeleteReview = async (reviewId: number) => {
@@ -215,17 +251,24 @@ export default function Dashboard() {
             <div className="flex flex-col gap-5 md:flex-row md:items-center">
               <div className="relative h-24 w-24 shrink-0 rounded-2xl border border-primary/20 bg-bg-main shadow-skeuo-inner">
                 <div className="flex h-full w-full items-center justify-center rounded-2xl bg-primary/5">
-                  <User className="h-10 w-10 text-primary/70" />
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover rounded-2xl" />
+                  ) : (
+                    <User className="h-10 w-10 text-primary/70" />
+                  )}
                 </div>
-                <button className="absolute -bottom-2 -right-2 rounded-xl bg-primary p-2 text-white shadow-lg shadow-primary/20 transition-transform hover:scale-105 cursor-pointer">
-                  <Settings className="h-4 w-4" />
+                <button 
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  className="absolute -bottom-2 -right-2 rounded-xl bg-primary p-2 text-white shadow-lg shadow-primary/20 transition-transform hover:scale-105 cursor-pointer"
+                >
+                  <Pencil className="h-4 w-4" />
                 </button>
               </div>
 
               <div>
                 <div className="mb-3 flex flex-wrap items-center gap-3">
                   <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-                    Cinema Enthusiast
+                    {userName}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
                     <ShieldCheck className="h-3 w-3" />
@@ -257,6 +300,12 @@ export default function Dashboard() {
             </div>
           </div>
         </header>
+
+        <AvatarSelectionModal 
+          isOpen={isAvatarModalOpen} 
+          onClose={() => setIsAvatarModalOpen(false)}
+          onUpdate={(url) => setAvatarUrl(url)}
+        />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
           <aside className="rounded-2xl border border-text-main/10 bg-card-bg/40 p-2">
@@ -312,7 +361,13 @@ export default function Dashboard() {
             </div>
 
             {activeTab === "overview" ? (
-              <OverviewDashboard history={history} watchlist={watchlist} favorites={favorites} reviews={reviews} />
+              <OverviewDashboard 
+                userName={userName}
+                history={history} 
+                watchlist={watchlist} 
+                favorites={favorites} 
+                reviews={reviews} 
+              />
             ) : activeTab === "reviews" ? (
               <div className="space-y-4">
                 {reviews.length > 0 ? (

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useParams,
   Link,
@@ -22,17 +22,22 @@ import {
   MessageSquare,
   Heart,
   Film,
+  ChevronDown,
+  ChevronUp,
+  MessageCircle,
+  Sparkles,
 } from "lucide-react";
-import { Movie, Cast } from "@/src/types";
+import { Movie, Cast, Review, Comment } from "@/src/types";
 import { TMDB_CONFIG, GENRES } from "@/src/constants";
-import { formatCurrency, formatDate, cn } from "@/src/lib/utils";
-import { motion } from "motion/react";
+import { formatCurrency, formatDate, cn, buildCommentTree, addCommentToTree } from "@/src/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
 import MovieCard from "./MovieCard";
 import VideoModal from "../layout/VideoModal";
 import PersonModal from "./PersonModal";
 import CastOverlay from "./CastOverlay";
 import { useTheme } from "@/src/lib/ThemeContext";
 import { getAuthToken } from "@/src/lib/authSession";
+import CommentSection from "../layout/CommentSection";
 
 interface MovieVideo {
   key: string;
@@ -42,12 +47,15 @@ interface MovieVideo {
 
 export default function MovieDetail() {
   const { id } = useParams();
+  const reviewsRef = useRef<HTMLDivElement>(null);
   const [searchParams] = useSearchParams();
   const mediaType = searchParams.get("type") || "movie";
   const [movie, setMovie] = useState<Movie | null>(null);
   const [cast, setCast] = useState<Cast[]>([]);
   const [similar, setSimilar] = useState<Movie[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const token = getAuthToken();
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [isCastOverlayOpen, setIsCastOverlayOpen] = useState(false);
@@ -105,26 +113,40 @@ export default function MovieDetail() {
   }, [id, movie?.id]);
 
   useEffect(() => {
+    const fetchWithTimeout = async (url: string, timeout = 10000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
+      } finally {
+        clearTimeout(id);
+      }
+    };
+
     const fetchDetail = async () => {
       setLoading(true);
       try {
         const [movieData, castData, similarData] = await Promise.all([
-          fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}`).then((r) => r.json()),
-          fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/credits`).then((r) => r.json()),
-          fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/recommendations`).then((r) =>
-            r.json(),
-          ),
+          fetchWithTimeout(`http://127.0.0.1:5000/api/movies/${id}?type=${mediaType}`),
+          fetchWithTimeout(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/credits`),
+          fetchWithTimeout(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/recommendations`),
         ]);
         setMovie(movieData);
         setCast(castData.cast || []);
-        // Prioritize recommendations, fallback to similar if empty
         setSimilar(
           similarData.results?.length > 0
             ? similarData.results.slice(0, 6)
             : [],
         );
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load movie details:", err);
+        window.dispatchEvent(
+          new CustomEvent("adnflix_toast", {
+            detail: { message: "Failed to load movie details. Please try again later." },
+          }),
+        );
       } finally {
         setLoading(false);
       }
@@ -135,26 +157,93 @@ export default function MovieDetail() {
 
   // Track History
   useEffect(() => {
-    if (movie) {
-      const history = JSON.parse(
-        localStorage.getItem("adnflix_history") || "[]",
-      );
-      // Remove if already exists to move it to the top (most recent)
-      const filteredHistory = history.filter(
-        (item: any) => item.id !== movie.id,
-      );
-      const newHistory = [
-        {
-          ...movie,
-          media_type: mediaType,
-          watchedAt: new Date().toISOString(),
-        },
-        ...filteredHistory,
-      ].slice(0, 50);
-      localStorage.setItem("adnflix_history", JSON.stringify(newHistory));
-      window.dispatchEvent(new Event("adnflix_sync"));
-    }
+    const trackHistory = async () => {
+      if (!movie) return;
+      const token = getAuthToken();
+      if (!token) return;
+
+      try {
+        await fetch("http://127.0.0.1:5000/api/history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tmdb_movie_id: movie.id,
+            movie_title: movie.title || (movie as any).name || "Unknown",
+            media_type: mediaType,
+          }),
+        });
+        window.dispatchEvent(new Event("adnflix_sync"));
+      } catch (err) {
+        console.error("Failed to track history on server", err);
+      }
+    };
+    trackHistory();
   }, [movie, mediaType]);
+
+  const fetchMovieReviews = async () => {
+    try {
+      const movieId = movie?.id || parseInt(id || "0");
+      const res = await fetch(`http://127.0.0.1:5000/api/movies/${movieId}/reviews`);
+      if (res.ok) {
+        const data = await res.json();
+        const reviewsWithComments = await Promise.all(
+          data.map(async (review: any) => {
+            try {
+              const commentsRes = await fetch(
+                `http://127.0.0.1:5000/api/reviews/${review.id}/comments`
+              );
+              const commentsData: Comment[] = commentsRes.ok ? await commentsRes.json() : [];
+              
+              return { 
+                ...review, 
+                comments: buildCommentTree(commentsData), 
+                isCommentsExpanded: false,
+                totalCommentCount: commentsData.length
+              };
+            } catch {
+              return { ...review, comments: [], isCommentsExpanded: false, totalCommentCount: 0 };
+            }
+          })
+        );
+        setReviews(reviewsWithComments);
+      }
+    } catch (err) {
+      console.error("Failed to fetch movie reviews", err);
+    }
+  };
+
+  useEffect(() => {
+    if (movie?.id || id) {
+      fetchMovieReviews();
+    }
+  }, [movie?.id, id]);
+
+  const onCommentAdded = (reviewId: number, newComment: Comment) => {
+    setReviews((prev) =>
+      prev.map((r) => {
+        if (r.id === reviewId) {
+          return {
+            ...r,
+            comments: addCommentToTree(r.comments || [], newComment),
+            isCommentsExpanded: true,
+            totalCommentCount: (r.totalCommentCount || 0) + 1
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  const toggleComments = (reviewId: number) => {
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === reviewId ? { ...r, isCommentsExpanded: !r.isCommentsExpanded } : r
+      )
+    );
+  };
 
   const handleAddReview = () => {
     if (!movie) return;
@@ -169,7 +258,6 @@ export default function MovieDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSaveReview = async () => {
-    console.log("[handleSaveReview] triggered", { movie: !!movie, reviewText: reviewText.trim() });
     if (!movie || !reviewText.trim()) {
       if (!reviewText.trim()) {
         window.dispatchEvent(
@@ -183,7 +271,6 @@ export default function MovieDetail() {
 
     const token = getAuthToken();
     if (!token) {
-      console.warn("[handleSaveReview] No token found, redirecting to login");
       navigate("/login");
       return;
     }
@@ -191,13 +278,6 @@ export default function MovieDetail() {
     setIsSubmitting(true);
     try {
       const movieTitle = movie.title || (movie as any).name || "Unknown Movie";
-      console.log("[handleSaveReview] sending request", { id: movie.id, movieTitle });
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.warn("[handleSaveReview] Request timed out after 30s");
-      }, 30000); // Increased to 30s
 
       const response = await fetch("http://127.0.0.1:5000/api/reviews", {
         method: "POST",
@@ -211,11 +291,7 @@ export default function MovieDetail() {
           rating: reviewRating,
           review_text: reviewText.trim(),
         }),
-        signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
-      console.log("[handleSaveReview] response received", { status: response.status });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -225,26 +301,17 @@ export default function MovieDetail() {
       setIsReviewModalOpen(false);
       setReviewText("");
       setReviewRating(5);
-
-      window.dispatchEvent(new Event("adnflix_sync"));
       window.dispatchEvent(
         new CustomEvent("adnflix_toast", {
           detail: { message: "Review published successfully!" },
         }),
       );
+      fetchMovieReviews();
     } catch (err: any) {
       console.error("Error saving review:", err);
-      let errorMessage = "Failed to publish review. Please try again.";
-      
-      if (err.name === 'AbortError') {
-        errorMessage = "Request timed out. Please check if your backend server is running.";
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
       window.dispatchEvent(
         new CustomEvent("adnflix_toast", {
-          detail: { message: errorMessage },
+          detail: { message: err.message || "Failed to publish review. Please try again." },
         }),
       );
     } finally {
@@ -256,6 +323,10 @@ export default function MovieDetail() {
     setIsReviewModalOpen(false);
     setReviewText("");
     setReviewRating(5);
+  };
+
+  const scrollToReviews = () => {
+    reviewsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleWatchTrailer = async () => {
@@ -404,6 +475,11 @@ export default function MovieDetail() {
 
   const title = movie.title || (movie as any).name;
   const releaseDate = movie.release_date || (movie as any).first_air_date;
+
+  const totalInteractions = reviews.reduce(
+    (acc, rev) => acc + 1 + (rev.totalCommentCount || 0),
+    0
+  );
 
   return (
     <div className="min-h-screen">
@@ -561,7 +637,7 @@ export default function MovieDetail() {
             <div className="flex flex-wrap items-center gap-6 text-sm text-text-main/80 font-medium mb-8">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/30 text-gold">
                 <Star className="w-4 h-4 fill-current" />
-                <span>{(movie.vote_average ?? 0).toFixed(1)} IMDb Score</span>
+                <span>{typeof movie.vote_average === 'number' ? movie.vote_average.toFixed(1) : (typeof movie.vote_average === 'string' && !isNaN(parseFloat(movie.vote_average)) ? parseFloat(movie.vote_average).toFixed(1) : "0.0")} IMDb Score</span>
               </div>
               {mediaType === "movie" ? (
                 <div className="flex items-center gap-2">
@@ -659,13 +735,6 @@ export default function MovieDetail() {
                   {isInWatchlist ? "In Watchlist" : "Watchlist"}
                 </button>
                 <button
-                  onClick={handleAddReview}
-                  className="p-2.5 rounded-xl bg-card-bg border border-text-main/10 text-text-main hover:text-primary hover:border-primary/30 transition-all cursor-pointer"
-                  title="Add Review"
-                >
-                  <MessageSquare className="w-5 h-5" />
-                </button>
-                <button
                   onClick={toggleFavorites}
                   className={cn(
                     "p-2.5 rounded-xl border transition-all cursor-pointer",
@@ -680,6 +749,13 @@ export default function MovieDetail() {
                   <Heart
                     className={cn("w-5 h-5", isInFavorites && "fill-current")}
                   />
+                </button>
+                <button
+                  onClick={scrollToReviews}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-text-main/60 hover:text-white hover:bg-white/10 transition-all text-xs font-bold cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  {totalInteractions} Discussions
                 </button>
               </div>
             </section>
@@ -745,6 +821,116 @@ export default function MovieDetail() {
                   </Link>
                 ))}
               </div>
+            </section>
+
+            {/* Reviews & Comments Section */}
+            <section ref={reviewsRef} className="mb-8 md:mb-12 scroll-mt-24">
+              <div className="relative mb-8 p-8 rounded-[2rem] bg-gradient-to-br from-primary/10 via-card-bg/50 to-bg-main border border-primary/20 shadow-skeuo-sm overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full filter blur-3xl -mr-20 -mt-20 group-hover:bg-primary/10 transition-all duration-700" />
+                
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.3em]">
+                        Community Discourse
+                      </span>
+                    </div>
+                    <h2 className="text-3xl font-black text-white">User Reviews</h2>
+                    <p className="text-sm text-text-main/50 max-w-sm leading-relaxed">
+                      What's your take on this cinema? Share your thoughts and join the conversation.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleAddReview}
+                    className="flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer group/btn"
+                  >
+                    <MessageCircle className="w-5 h-5 group-hover/btn:rotate-12 transition-transform" />
+                    Write a Review
+                  </button>
+                </div>
+              </div>
+
+              {reviews.length > 0 ? (
+                <div className="space-y-6">
+                  {reviews.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="p-6 rounded-2xl bg-card-bg/40 border border-text-main/10 shadow-skeuo-sm flex flex-col gap-4 relative overflow-hidden group"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                            <User className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-sm text-white">
+                              {rev.user_name || "Anonymous Movie Buff"}
+                            </span>
+                            <p className="text-[9px] text-text-main/30 font-bold uppercase mt-0.5">
+                              {new Date(rev.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={cn(
+                                "w-3 h-3",
+                                star <= rev.rating
+                                  ? "fill-primary text-primary"
+                                  : "text-text-main/20",
+                              )}
+                            />
+                          ))}
+                          <span className="ml-1.5 text-[10px] font-bold text-primary">
+                            {rev.rating}.0
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-text-main/80 leading-relaxed italic pl-1">
+                        "{rev.review_text}"
+                      </p>
+
+                      <div className="border-t border-text-main/5 pt-3 flex flex-col gap-3">
+                        <button
+                          onClick={() => toggleComments(rev.id)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-text-main/40 hover:text-white transition-colors cursor-pointer self-start"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                          <span>
+                            {rev.totalCommentCount || 0}{" "}
+                            {rev.totalCommentCount === 1 ? "Comment" : "Comments"}
+                          </span>
+                          {rev.isCommentsExpanded ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </button>
+
+                        <AnimatePresence>
+                          {rev.isCommentsExpanded && (
+                            <CommentSection 
+                              reviewId={rev.id} 
+                              comments={rev.comments || []} 
+                              onCommentAdded={(newComment) => onCommentAdded(rev.id, newComment)} 
+                            />
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="skeuo-card bg-card-bg/20 p-8 text-center text-text-main/35 italic">
+                  No reviews posted yet. Be the first to share your thoughts on this movie!
+                </div>
+              )}
             </section>
 
             {/* Similar Movies */}

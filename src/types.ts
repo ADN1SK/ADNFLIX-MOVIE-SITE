@@ -32,6 +32,31 @@ export interface Genre {
   name: string;
 }
 
+export interface Comment {
+  id: number;
+  review_id: number;
+  user_id: number;
+  user_name: string;
+  comment_text: string;
+  parent_id: number | null;
+  created_at: string;
+  replies?: Comment[];
+}
+
+export interface Review {
+  id: number;
+  user_id: number;
+  user_name: string;
+  tmdb_movie_id: number;
+  movie_title: string;
+  rating: number;
+  review_text: string;
+  created_at: string;
+  comments?: Comment[];
+  isCommentsExpanded?: boolean;
+  totalCommentCount?: number;
+}
+
 export interface User {
   id: string;
   email: string;

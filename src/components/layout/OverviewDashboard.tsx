@@ -2,17 +2,24 @@ import React, { useMemo } from "react";
 import { GENRES } from "@/src/constants";
 import { Movie } from "@/src/types";
 import { motion } from "motion/react";
-import { BarChart3, Clock, PieChart, Activity, Film, Star, Calendar, MessageSquare, Heart } from "lucide-react";
+import { BarChart3, Clock, PieChart, Activity, Film, Star, Calendar, MessageSquare, Heart, Bookmark } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 interface OverviewDashboardProps {
+  userName?: string;
   history: Movie[];
   watchlist: Movie[];
   favorites: Movie[];
   reviews?: any[];
 }
 
-export default function OverviewDashboard({ history, watchlist, favorites, reviews = [] }: OverviewDashboardProps) {
+export default function OverviewDashboard({ 
+  userName = "Cinema Enthusiast", 
+  history, 
+  watchlist, 
+  favorites, 
+  reviews = [] 
+}: OverviewDashboardProps) {
   // Compute Genre Distribution
   const genreStats = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -68,14 +75,20 @@ export default function OverviewDashboard({ history, watchlist, favorites, revie
   // Simulated Weekly Activity (Distribute history count across 7 days)
   const weeklyActivity = useMemo(() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const baseCount = history.length + reviews.length + favorites.length;
+    let baseCount = history.length + reviews.length + favorites.length;
     
+    // Fallback: If no activity, show some placeholder data so the chart isn't empty
+    if (baseCount === 0) baseCount = 10; 
+
     // Create a deterministic but varied looking chart based on interaction count
     return days.map((day, index) => {
       // Magic formula to create pseudo-random looking but stable bars
       const randomFactor = Math.sin(index * 13.37 + baseCount) * 0.5 + 0.5; 
       let value = Math.floor(randomFactor * (baseCount / 2 + 1));
-      if (baseCount === 0) value = 0;
+      
+      // If we used fallback, ensure we have some values
+      if (baseCount === 10 && value === 0) value = 2;
+      
       return { day, value };
     });
   }, [history, reviews, favorites]);
@@ -86,8 +99,22 @@ export default function OverviewDashboard({ history, watchlist, favorites, revie
     : "0.0";
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700">
       
+      {/* Hero Section */}
+      <div className="rounded-3xl p-8 bg-gradient-to-br from-primary/20 to-card-bg border border-text-main/10 shadow-skeuo-lg relative overflow-hidden">
+        <div className="relative z-10">
+          <h2 className="text-3xl font-black tracking-tighter">
+            Welcome Back, <span className="text-primary">{userName}</span>
+          </h2>
+          <p className="text-text-main/60 mt-2 max-w-xl">
+            You've watched {history.length} movies! Your cinematic journey is looking exciting. Here’s a summary of your recent activity and preferences.
+          </p>
+        </div>
+        {/* Abstract background shape */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20" />
+      </div>
+
       {/* Top Row: Quick Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-text-main/10 bg-card-bg/60 p-5 shadow-skeuo-sm flex items-center gap-4">
@@ -162,6 +189,7 @@ export default function OverviewDashboard({ history, watchlist, favorites, revie
                         day.value > 0 ? "bg-primary/80 group-hover:bg-primary" : "bg-text-main/5"
                       )}
                       style={{
+                        height: `${heightPercent}%`,
                         minHeight: day.value > 0 ? '10%' : '2px',
                         boxShadow: day.value > 0 ? '0 0 10px rgba(229,9,20,0.2)' : 'none'
                       }}

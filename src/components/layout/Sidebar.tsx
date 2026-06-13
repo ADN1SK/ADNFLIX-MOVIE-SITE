@@ -17,6 +17,7 @@ import {
   Clock,
   LogOut,
   Settings,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { clearUserSession } from "@/src/lib/authSession";
@@ -32,6 +33,7 @@ const menuItems = [
   { label: "Trending", path: "/trending", icon: TrendingUp },
   { label: "Popular Hits", path: "/popular", icon: Flame },
   { label: "Browse Genres", path: "/genres", icon: Tags },
+  { label: "Cinema Feed", path: "/reviews", icon: MessageSquare },
 ];
 
 const dashboardItems = [
@@ -122,9 +124,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </h4>
             {dashboardItems.map((item) => {
               const Icon = item.icon;
+              const tab = item.path.split("=")[1];
               const isActive =
                 location.pathname === "/dashboard" &&
-                location.search.includes(item.path.split("=")[1] || "overview");
+                (tab
+                  ? location.search.includes(tab)
+                  : !location.search || location.search.includes("overview"));
               return (
                 <Link
                   key={item.label}
@@ -146,27 +151,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             })}
           </div>
 
-          {/* User Section */}
+          {/* User Section (Removed) */}
           <div className="space-y-2">
-            <h4 className="px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-text-main/20">
-              User
-            </h4>
-            <Link
-              to="/login"
-              onClick={onClose}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-main/60 hover:bg-white/5 hover:text-text-main transition-all font-bold text-sm cursor-pointer"
-            >
-              <User className="w-5 h-5" />
-              <span>Account Settings</span>
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-main/30 hover:bg-red-500/10 hover:text-red-500 transition-all font-bold text-sm cursor-pointer"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Sign Out</span>
-            </button>
           </div>
         </div>
       </motion.aside>

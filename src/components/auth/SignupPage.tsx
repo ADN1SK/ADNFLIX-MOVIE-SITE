@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, Loader2, ChevronLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { clearUserSession, decodeJwtPayload } from "@/src/lib/authSession";
 
@@ -54,6 +54,13 @@ export default function SignupPage() {
           String(data.id ?? data.userId ?? ""),
         );
         localStorage.setItem("adnflix_user_name", data.name || name);
+
+        // Save greeting flags for the banner
+        sessionStorage.setItem("adnflix_is_new_user", String(data.is_new_user || false));
+        sessionStorage.setItem("adnflix_is_first_login_today", String(data.is_first_login_today || false));
+        sessionStorage.setItem("adnflix_user_name", data.name || name);
+        sessionStorage.removeItem("adnflix_greeting_shown");
+
         console.info("[AUTH] signup", {
           userId: data.id ?? data.userId ?? null,
           jwtPayload: decodeJwtPayload(data.token),

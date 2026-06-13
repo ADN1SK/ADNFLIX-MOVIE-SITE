@@ -36,13 +36,14 @@ import {
 } from "lucide-react";
 import MovieDetail from "./components/movies/MovieDetail";
 import Dashboard from "./components/layout/Dashboard";
+import ReviewsFeed from "./components/layout/ReviewsFeed";
 import GenrePage from "./components/movies/GenrePage";
 import PersonPage from "./components/movies/PersonPage";
 import CastPage from "./components/movies/CastPage";
 import SearchPage from "./components/movies/SearchPage";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
-import WelcomeMessage from "./components/layout/WelcomeMessage";
+import GreetingBanner from "./components/layout/GreetingBanner";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { TMDB_CONFIG, GENRES, LANGUAGES } from "./constants";
 import { useTheme } from "./lib/ThemeContext";
@@ -302,7 +303,6 @@ function Home() {
 
   return (
     <div className="min-h-screen pb-20 overflow-x-hidden">
-      {userName && <WelcomeMessage name={userName} />}
       {trending.length > 0 && <Hero movies={trending.slice(0, 10)} />}
 
       <main className="max-w-screen-2xl mx-auto px-4 md:px-8 mt-6 md:mt-12 relative z-20">
@@ -994,6 +994,8 @@ export default function App() {
           <ScrollToTop />
           
           <Navbar onToggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} />
+          
+          <GreetingBanner />
 
           <div className="flex">
             <Sidebar 
@@ -1032,6 +1034,7 @@ export default function App() {
                 />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/reviews" element={<ReviewsFeed />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
 

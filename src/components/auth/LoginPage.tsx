@@ -74,6 +74,13 @@ export default function LoginPage() {
         String(data.id ?? data.userId ?? ""),
       );
       localStorage.setItem("adnflix_user_name", data.name || "");
+      
+      // Save greeting flags for the banner
+      sessionStorage.setItem("adnflix_is_new_user", String(data.is_new_user || false));
+      sessionStorage.setItem("adnflix_is_first_login_today", String(data.is_first_login_today || false));
+      sessionStorage.setItem("adnflix_user_name", data.name || "");
+      sessionStorage.removeItem("adnflix_greeting_shown");
+
       console.info("[AUTH] login", {
         userId: data.id ?? data.userId ?? null,
         jwtPayload: decodeJwtPayload(data.token),

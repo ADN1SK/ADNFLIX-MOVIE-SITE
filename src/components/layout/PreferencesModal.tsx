@@ -6,10 +6,11 @@ import { useTheme } from "@/src/lib/ThemeContext";
 
 const ACCENT_COLORS = [
   { id: "red", name: "Crimson Red", value: "#e50914" },
-  { id: "purple", name: "Neon Purple", value: "#9333ea" },
-  { id: "blue", name: "Ocean Blue", value: "#3b82f6" },
-  { id: "emerald", name: "Emerald Green", value: "#10b981" },
-  { id: "gold", name: "Golden Aura", value: "#d4af37" },
+  { id: "purple", name: "Purple", value: "#800080" },
+  { id: "pink", name: "Pink", value: "#FFC0CB" },
+  { id: "blue", name: "Blue", value: "#0000FF" },
+  { id: "emerald", name: "Green", value: "#008000" },
+  { id: "gold", name: "Gold", value: "#FFD700" },
 ];
 
 export default function PreferencesModal({

@@ -105,7 +105,7 @@ export default function Footer() {
               },
               { 
                 Icon: Instagram, 
-                href: "https://instagram.com/adam_m_yasin", 
+                href: "https://instagram.com/adaniskii", 
                 label: "Instagram",
                 hoverClass: "hover:text-[#E4405F] hover:border-[#E4405F]/50 hover:bg-[#E4405F]/5"
               },

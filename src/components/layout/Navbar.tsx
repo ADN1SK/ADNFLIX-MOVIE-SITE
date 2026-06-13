@@ -48,9 +48,30 @@ export default function Navbar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const settingsRef = React.useRef<HTMLDivElement>(null);
   const token = getAuthToken();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+        if (!token) return;
+        try {
+            const res = await fetch("http://127.0.0.1:5000/api/auth/profile", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAvatarUrl(data.avatar_url);
+            }
+        } catch (err) {
+            console.error("Failed to fetch profile for navbar:", err);
+        }
+    };
+    fetchProfile();
+    window.addEventListener("adnflix_sync", fetchProfile);
+    return () => window.removeEventListener("adnflix_sync", fetchProfile);
+  }, [token]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -110,8 +131,6 @@ export default function Navbar({
 
   const isDashboard = location.pathname === "/dashboard";
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
-
-  if (isAuthPage) return null;
   
   const isEditableTarget = (target: EventTarget | null) =>
     target instanceof HTMLInputElement ||
@@ -216,6 +235,8 @@ export default function Navbar({
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
     }
   };
+
+  if (isAuthPage) return null;
 
   return (
     <nav
@@ -407,6 +428,7 @@ export default function Navbar({
                 <div className="flex flex-col gap-6">
                   {[
                     { label: "Home", path: "/" },
+                    { label: "Cinema Feed", path: "/reviews" },
                     { label: "Dashboard", path: "/dashboard" },
                     { label: "Search", path: "/search" },
                     { label: "About", path: "/about" },
@@ -474,7 +496,11 @@ export default function Navbar({
                   isSettingsOpen ? "border-primary shadow-skeuo-md" : "border-text-main/10 bg-card-bg hover:border-primary/50"
                 )}
               >
-                <User className={cn("w-5 h-5 transition-colors", isSettingsOpen ? "text-primary" : "text-text-main")} />
+                {avatarUrl ? (
+                    <img src={avatarUrl} alt="User" className="w-full h-full object-cover" />
+                ) : (
+                    <User className={cn("w-5 h-5 transition-colors", isSettingsOpen ? "text-primary" : "text-text-main")} />
+                )}
               </button>
               
               <AnimatePresence>
@@ -499,8 +525,27 @@ export default function Navbar({
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-primary/10 text-text-main/70 hover:text-primary group"
                       >
                         <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
-                        <span className="text-sm font-bold tracking-tight">User Settings</span>
+                        <span className="text-sm font-bold tracking-tight">Account Settings</span>
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSettingsOpen(false);
+                          setIsPreferencesOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-primary/10 text-text-main/70 hover:text-primary group"
+                      >
+                        <Sliders className="w-4 h-4" />
+                        <span className="text-sm font-bold tracking-tight">Preferences</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left hover:bg-red-500/10 text-text-main/70 hover:text-red-500 group"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span className="text-sm font-bold tracking-tight">Sign Out</span>
+                      </button>
                       <div className="my-1 border-t border-text-main/5" />
                     </div>
                   </motion.div>
