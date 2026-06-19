@@ -168,6 +168,29 @@ export default function MovieCard({
 
   const mediaType = movie.media_type || ((movie as any).name ? "tv" : "movie");
 
+  const trackHistory = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      await fetch("/api/history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          tmdb_movie_id: movie.id,
+          movie_title: movie.title || (movie as any).name || "Unknown",
+          media_type: mediaType,
+        }),
+      });
+      window.dispatchEvent(new Event("adnflix_sync"));
+    } catch (err) {
+      console.error("Failed to track history on click", err);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -182,7 +205,10 @@ export default function MovieCard({
       <Link
         to={`/movies/${movie.id}?type=${mediaType}`}
         className="absolute inset-0 z-10"
-        onClick={onClick}
+        onClick={(e) => {
+          trackHistory();
+          if (onClick) onClick();
+        }}
       />
 
       {/* Poster Image */}

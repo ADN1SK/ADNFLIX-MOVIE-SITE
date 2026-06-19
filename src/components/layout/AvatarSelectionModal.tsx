@@ -13,18 +13,17 @@ interface AvatarSelectionModalProps {
 const PRESET_AVATARS = [
   "/avatars/darth-vader.jpg",
   "/avatars/film-buff.png",
-  "/avatars/minimalist-01.png",
-  "/avatars/retro-01.png",
-  "/avatars/geometric-01.svg",
-  "/avatars/neon-01.svg",
-  "/avatars/gradient-01.svg",
-  "/avatars/illustrative-01.svg",
+  "/avatars/perry.jpeg",
+  "/avatars/vampire-raph.jpeg",
+  "/avatars/penguin-suit.jpeg",
+  "/avatars/vincent-roche.jpeg",
 ];
 
 export default function AvatarSelectionModal({ isOpen, onClose, onUpdate }: AvatarSelectionModalProps) {
   const [selectedAvatar, setSelectedAvatar] = useState<string>("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,22 +52,40 @@ export default function AvatarSelectionModal({ isOpen, onClose, onUpdate }: Avat
     if (!selectedAvatar && !uploadedFile) return;
 
     const token = getAuthToken();
+    setIsSaving(true);
     try {
+      let avatarUrl = selectedAvatar;
+      
+      // If a file was uploaded, upload it to the server first
+      if (uploadedFile) {
+        const formData = new FormData();
+        formData.append("avatar", uploadedFile);
+
+        const uploadRes = await fetch("http://localhost:5000/api/auth/upload-avatar", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const errorData = await uploadRes.json();
+          console.error("Avatar upload failed:", errorData);
+          throw new Error(errorData.details || errorData.message || errorData.error || "Failed to upload image");
+        }
+
+        const uploadData = await uploadRes.json();
+        avatarUrl = uploadData.avatar_url;
+      }
+
       // Fetch current profile first to get the user's name
-      const profileRes = await fetch("http://127.0.0.1:5000/api/auth/profile", {
+      const profileRes = await fetch("/api/auth/profile", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const profile = await profileRes.json();
 
-      let avatarUrl = selectedAvatar;
-      
-      // If a file was uploaded, we'd typically upload it to a server first.
-      // For now, we'll use the Base64 dataURL as the avatar URL if it fits.
-      if (uploadedFile && previewUrl) {
-        avatarUrl = previewUrl; 
-      }
-
-      const response = await fetch("http://127.0.0.1:5000/api/auth/profile", {
+      const response = await fetch("/api/auth/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -83,16 +100,17 @@ export default function AvatarSelectionModal({ isOpen, onClose, onUpdate }: Avat
       if (response.ok) {
         onUpdate(avatarUrl);
         onClose();
-        // Dispatch sync event for instant UI update
         window.dispatchEvent(new Event("adnflix_sync"));
         window.dispatchEvent(new CustomEvent("adnflix_toast", { detail: { message: "Avatar updated successfully!" } }));
       } else {
         const errorData = await response.json();
-        throw new Error(`Failed to update avatar: ${errorData.message || JSON.stringify(errorData)}`);
+        throw new Error(errorData.message || errorData.error || `Failed to update profile`);
       }
     } catch (err) {
       console.error(err);
       window.dispatchEvent(new CustomEvent("adnflix_toast", { detail: { message: err instanceof Error ? err.message : "Error updating avatar" } }));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -135,14 +153,14 @@ export default function AvatarSelectionModal({ isOpen, onClose, onUpdate }: Avat
                       selectedAvatar === avatar ? "border-primary" : "border-transparent"
                     )}
                   >
-                    <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={avatar} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
                 
                 {/* Uploaded Preview */}
                 {previewUrl && (
                   <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary">
-                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <img src={previewUrl} alt="" className="w-full h-full object-cover" />
                   </div>
                 )}
               </div>
@@ -163,9 +181,15 @@ export default function AvatarSelectionModal({ isOpen, onClose, onUpdate }: Avat
                 </button>
                 <button 
                   onClick={handleSave}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white transition-colors font-bold text-sm cursor-pointer"
+                  disabled={isSaving || (!selectedAvatar && !uploadedFile)}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white transition-colors font-bold text-sm cursor-pointer disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" /> Save
+                  {isSaving ? (
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  {isSaving ? "Saving..." : "Save"}
                 </button>
               </div>
             </div>

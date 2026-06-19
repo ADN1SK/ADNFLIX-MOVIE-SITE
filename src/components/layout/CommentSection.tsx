@@ -61,7 +61,7 @@ function CommentItem({
             {token && (
               <button
                 onClick={() => onReply(comment.id, comment.user_name)}
-                className="flex items-center gap-1.5 text-[10px] font-black text-primary uppercase tracking-wider hover:opacity-70 transition-opacity cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-[10px] font-black text-primary uppercase tracking-wider hover:bg-primary/20 transition-all cursor-pointer"
               >
                 <Reply className="w-3 h-3" />
                 Reply
@@ -71,17 +71,17 @@ function CommentItem({
             {comment.replies && comment.replies.length > 0 && (
               <button
                 onClick={() => setShowReplies(!showReplies)}
-                className="flex items-center gap-1.5 text-[10px] font-black text-text-main/30 uppercase tracking-wider hover:text-text-main/50 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 text-[10px] font-black text-text-main/40 uppercase tracking-wider hover:bg-white/10 hover:text-text-main/70 transition-all cursor-pointer"
               >
                 {showReplies ? (
                   <>
                     <ChevronUp className="w-3 h-3" />
-                    Hide {comment.replies.length} {comment.replies.length === 1 ? 'Reply' : 'Replies'}
+                    Hide {comment.replies.length}
                   </>
                 ) : (
                   <>
                     <ChevronDown className="w-3 h-3" />
-                    Show {comment.replies.length} {comment.replies.length === 1 ? 'Reply' : 'Replies'}
+                    Show {comment.replies.length}
                   </>
                 )}
               </button>
@@ -136,7 +136,7 @@ export default function CommentSection({
     setIsSubmitting(true);
     try {
       const res = await fetch(
-        `http://127.0.0.1:5000/api/reviews/${reviewId}/comments`,
+        `/api/reviews/${reviewId}/comments`,
         {
           method: "POST",
           headers: {
@@ -217,7 +217,7 @@ export default function CommentSection({
               </div>
               <button
                 onClick={() => setReplyTarget(null)}
-                className="text-[10px] font-black text-text-main/30 hover:text-white transition-colors"
+                className="text-[10px] font-black text-text-main/30 hover:text-red-500 bg-white/5 px-2 py-1 rounded-md transition-all uppercase tracking-tighter"
               >
                 CANCEL
               </button>

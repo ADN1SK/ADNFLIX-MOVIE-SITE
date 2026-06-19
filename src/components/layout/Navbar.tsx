@@ -57,7 +57,7 @@ export default function Navbar({
     const fetchProfile = async () => {
         if (!token) return;
         try {
-            const res = await fetch("http://127.0.0.1:5000/api/auth/profile", {
+            const res = await fetch("/api/auth/profile", {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
@@ -497,7 +497,7 @@ export default function Navbar({
                 )}
               >
                 {avatarUrl ? (
-                    <img src={avatarUrl} alt="User" className="w-full h-full object-cover" />
+                    <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                     <User className={cn("w-5 h-5 transition-colors", isSettingsOpen ? "text-primary" : "text-text-main")} />
                 )}

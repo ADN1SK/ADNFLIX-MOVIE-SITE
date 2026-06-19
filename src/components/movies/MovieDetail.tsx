@@ -80,10 +80,10 @@ export default function MovieDetail() {
       try {
         const movieId = movie?.id || parseInt(id || "0");
         const [watchlistRes, favoritesRes] = await Promise.all([
-          fetch("http://127.0.0.1:5000/api/user-movies/watchlist", {
+          fetch("/api/user-movies/watchlist", {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch("http://127.0.0.1:5000/api/user-movies/favorite", {
+          fetch("/api/user-movies/favorite", {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -129,9 +129,9 @@ export default function MovieDetail() {
       setLoading(true);
       try {
         const [movieData, castData, similarData] = await Promise.all([
-          fetchWithTimeout(`http://127.0.0.1:5000/api/movies/${id}?type=${mediaType}`),
-          fetchWithTimeout(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/credits`),
-          fetchWithTimeout(`http://127.0.0.1:5000/api/movies/${mediaType}/${id}/recommendations`),
+          fetchWithTimeout(`/api/movies/${id}?type=${mediaType}`),
+          fetchWithTimeout(`/api/movies/${mediaType}/${id}/credits`),
+          fetchWithTimeout(`/api/movies/${mediaType}/${id}/recommendations`),
         ]);
         setMovie(movieData);
         setCast(castData.cast || []);
@@ -163,7 +163,7 @@ export default function MovieDetail() {
       if (!token) return;
 
       try {
-        await fetch("http://127.0.0.1:5000/api/history", {
+        await fetch("/api/history", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -186,14 +186,21 @@ export default function MovieDetail() {
   const fetchMovieReviews = async () => {
     try {
       const movieId = movie?.id || parseInt(id || "0");
-      const res = await fetch(`http://127.0.0.1:5000/api/movies/${movieId}/reviews`);
+      const res = await fetch(`/api/movies/${movieId}/reviews`);
       if (res.ok) {
         const data = await res.json();
+        
+        if (!Array.isArray(data)) {
+          console.error("Expected array of reviews, got:", data);
+          setReviews([]);
+          return;
+        }
+
         const reviewsWithComments = await Promise.all(
           data.map(async (review: any) => {
             try {
               const commentsRes = await fetch(
-                `http://127.0.0.1:5000/api/reviews/${review.id}/comments`
+                `/api/reviews/${review.id}/comments`
               );
               const commentsData: Comment[] = commentsRes.ok ? await commentsRes.json() : [];
               
@@ -279,7 +286,7 @@ export default function MovieDetail() {
     try {
       const movieTitle = movie.title || (movie as any).name || "Unknown Movie";
 
-      const response = await fetch("http://127.0.0.1:5000/api/reviews", {
+      const response = await fetch("/api/reviews", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -332,7 +339,7 @@ export default function MovieDetail() {
   const handleWatchTrailer = async () => {
     if (!movie) return;
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/movies/${mediaType}/${movie.id}/videos`);
+      const res = await fetch(`/api/movies/${mediaType}/${movie.id}/videos`);
       const data = await res.json();
       const trailer = data.results?.find(
         (v: MovieVideo) => v.type === "Trailer" && v.site === "YouTube",
@@ -363,7 +370,7 @@ export default function MovieDetail() {
 
     try {
       if (isInWatchlist) {
-        const res = await fetch(`http://127.0.0.1:5000/api/user-movies/watchlist/${movie.id}`, {
+        const res = await fetch(`/api/user-movies/watchlist/${movie.id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -376,7 +383,7 @@ export default function MovieDetail() {
           );
         }
       } else {
-        const res = await fetch("http://127.0.0.1:5000/api/user-movies", {
+        const res = await fetch("/api/user-movies", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -416,7 +423,7 @@ export default function MovieDetail() {
 
     try {
       if (isInFavorites) {
-        const res = await fetch(`http://127.0.0.1:5000/api/user-movies/favorite/${movie.id}`, {
+        const res = await fetch(`/api/user-movies/favorite/${movie.id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -429,7 +436,7 @@ export default function MovieDetail() {
           );
         }
       } else {
-        const res = await fetch("http://127.0.0.1:5000/api/user-movies", {
+        const res = await fetch("/api/user-movies", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -669,10 +676,10 @@ export default function MovieDetail() {
                 <a
                   href={movie.homepage}
                   target="_blank"
-                  className="flex items-center gap-2 hover:text-primary transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 hover:text-primary transition-all group"
                 >
-                  <Globe className="w-4 h-4" />
-                  <span>Website</span>
+                  <Globe className="w-4 h-4 text-text-main/40 group-hover:text-primary transition-colors" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-text-main/60 group-hover:text-text-main">Website</span>
                 </a>
               )}
             </div>
@@ -752,9 +759,9 @@ export default function MovieDetail() {
                 </button>
                 <button
                   onClick={scrollToReviews}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-text-main/60 hover:text-white hover:bg-white/10 transition-all text-xs font-bold cursor-pointer"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-text-main/40 hover:bg-white/10 hover:text-white transition-all cursor-pointer group/disc"
                 >
-                  <MessageSquare className="w-4 h-4" />
+                  <MessageSquare className="w-4 h-4 text-primary group-hover/disc:scale-110 transition-transform" />
                   {totalInteractions} Discussions
                 </button>
               </div>
@@ -788,7 +795,7 @@ export default function MovieDetail() {
                 <h2 className="text-2xl font-bold">Top Cast</h2>
                 <Link
                   to={`/movies/${movie.id}/cast`}
-                  className="text-xs font-bold text-primary hover:underline cursor-pointer"
+                  className="px-4 py-1.5 rounded-full bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-text-main/40 hover:bg-primary hover:text-white hover:border-primary transition-all cursor-pointer"
                 >
                   View All
                 </Link>
@@ -899,17 +906,17 @@ export default function MovieDetail() {
                       <div className="border-t border-text-main/5 pt-3 flex flex-col gap-3">
                         <button
                           onClick={() => toggleComments(rev.id)}
-                          className="flex items-center gap-1.5 text-xs font-bold text-text-main/40 hover:text-white transition-colors cursor-pointer self-start"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-widest text-text-main/40 hover:bg-white/10 hover:text-white transition-all cursor-pointer self-start group/cbtn"
                         >
-                          <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                          <MessageSquare className="w-3.5 h-3.5 text-primary group-hover/cbtn:scale-110 transition-transform" />
                           <span>
                             {rev.totalCommentCount || 0}{" "}
                             {rev.totalCommentCount === 1 ? "Comment" : "Comments"}
                           </span>
                           {rev.isCommentsExpanded ? (
-                            <ChevronUp className="w-3 h-3" />
+                            <ChevronUp className="w-3 h-3 opacity-40" />
                           ) : (
-                            <ChevronDown className="w-3 h-3" />
+                            <ChevronDown className="w-3 h-3 opacity-40" />
                           )}
                         </button>
 

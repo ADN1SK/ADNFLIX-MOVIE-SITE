@@ -7,7 +7,6 @@ import { useCallback, useState, useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Bookmark,
-  Trash2,
   ChevronRight,
   Clock,
   Heart,
@@ -29,6 +28,7 @@ import MovieCard from "../movies/MovieCard";
 import type { Movie } from "@/src/types";
 import OverviewDashboard from "./OverviewDashboard";
 import AvatarSelectionModal from "./AvatarSelectionModal";
+import DeleteButton from "./DeleteButton";
 
 const accountTabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -66,8 +66,9 @@ export default function Dashboard() {
   };
 
   type HistoryItem = Movie & {
+    history_id: number;
     media_type?: string;
-    watchedAt?: string;
+    watched_at?: string;
   };
 
   // Data States
@@ -87,7 +88,7 @@ export default function Dashboard() {
       setHistory([]);
     } else {
       try {
-        const profileRes = await fetch("http://127.0.0.1:5000/api/auth/profile", {
+        const profileRes = await fetch("/api/auth/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (profileRes.ok) {
@@ -97,10 +98,10 @@ export default function Dashboard() {
         }
 
         const endpoints = [
-          { type: "watchlist", url: "http://127.0.0.1:5000/api/user-movies/watchlist" },
-          { type: "favorite", url: "http://127.0.0.1:5000/api/user-movies/favorite" },
-          { type: "reviews", url: `http://127.0.0.1:5000/api/reviews/${userId}` },
-          { type: "history", url: "http://127.0.0.1:5000/api/history" },
+          { type: "watchlist", url: "/api/user-movies/watchlist" },
+          { type: "favorite", url: "/api/user-movies/favorite" },
+          { type: "reviews", url: `/api/reviews/${userId}` },
+          { type: "history", url: "/api/history" },
         ];
 
         const results = await Promise.all(
@@ -128,20 +129,28 @@ export default function Dashboard() {
           results.find((r) => r.type === "history")?.data || [];
 
         const fetchFullMovie = async (item: SavedListItem | any): Promise<Movie> => {
-          // If it's a history item, it has tmdb_movie_id
-          const tmdbId = item.tmdb_movie_id || item.tmdb_movie_id;
-          const res = await fetch(`http://127.0.0.1:5000/api/movies/movie/${tmdbId}`);
-          if (!res.ok) {
-            throw new Error(`Failed to load movie ${tmdbId}`);
-          }
+          const tmdbId = item.tmdb_movie_id;
+          const res = await fetch(`/api/movies/movie/${tmdbId}`);
+          if (!res.ok) throw new Error(`Failed to load movie ${tmdbId}`);
           return res.json();
         };
 
-        const [fullWatchlist, fullFavorites, fullHistory] = await Promise.all([
+        const [fullWatchlist, fullFavorites] = await Promise.all([
           Promise.all(watchlistData.map(fetchFullMovie)),
           Promise.all(favoritesData.map(fetchFullMovie)),
-          Promise.all(historyData.map(fetchFullMovie)),
         ]);
+
+        const fullHistory: HistoryItem[] = await Promise.all(
+          historyData.map(async (item) => {
+            const movie = await fetchFullMovie(item);
+            return {
+              ...movie,
+              history_id: item.id,
+              media_type: item.media_type,
+              watched_at: item.watched_at,
+            };
+          })
+        );
 
         setWatchlist(fullWatchlist);
         setFavorites(fullFavorites);
@@ -176,7 +185,7 @@ export default function Dashboard() {
     if (!token) return;
 
     try {
-      await fetch("http://127.0.0.1:5000/api/history", {
+      await fetch("/api/history", {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -196,14 +205,35 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteHistoryItem = async (historyId: number) => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/history/${historyId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        window.dispatchEvent(new Event("adnflix_sync"));
+        window.dispatchEvent(
+          new CustomEvent("adnflix_toast", {
+            detail: { message: "Removed from history" },
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("Failed to delete history item", err);
+    }
+  };
+
   const handleDeleteReview = async (reviewId: number) => {
     const token = getAuthToken();
     if (!token) return;
 
-    if (!confirm("Are you sure you want to delete this review?")) return;
-
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/reviews/manage/${reviewId}`, {
+      const res = await fetch(`/api/reviews/manage/${reviewId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -252,7 +282,7 @@ export default function Dashboard() {
               <div className="relative h-24 w-24 shrink-0 rounded-2xl border border-primary/20 bg-bg-main shadow-skeuo-inner">
                 <div className="flex h-full w-full items-center justify-center rounded-2xl bg-primary/5">
                   {avatarUrl ? (
-                    <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover rounded-2xl" />
+                    <img src={avatarUrl} alt="" className="h-full w-full object-cover rounded-2xl" />
                   ) : (
                     <User className="h-10 w-10 text-primary/70" />
                   )}
@@ -341,12 +371,12 @@ export default function Dashboard() {
                 <div className="flex items-center gap-4">
                   <h2 className="mt-1 text-2xl font-bold">{activeLabel}</h2>
                   {activeTab === "history" && history.length > 0 && (
-                    <button
-                      onClick={clearHistory}
-                      className="text-[10px] uppercase font-bold text-text-main/30 hover:text-primary flex items-center gap-1 transition-colors mt-1"
-                    >
-                      <Trash2 className="h-3 w-3" /> Clear History
-                    </button>
+                    <DeleteButton
+                      onDelete={clearHistory}
+                      label="Clear History"
+                      className="mt-1"
+                      confirmMessage="Wipe all history?"
+                    />
                   )}
                 </div>
               </div>
@@ -418,12 +448,11 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div className="flex justify-end gap-3 mt-2">
-                        <button
-                          onClick={() => handleDeleteReview(rev.id)}
-                          className="text-[10px] font-bold uppercase tracking-widest text-text-main/30 hover:text-red-500 transition-colors"
-                        >
-                          Delete
-                        </button>
+                        <DeleteButton
+                          onDelete={() => handleDeleteReview(rev.id)}
+                          label="Delete Review"
+                          confirmMessage="Remove this review?"
+                        />
                         <Link
                           to={`/movies/${rev.tmdb_movie_id}`}
                           className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline"
@@ -436,6 +465,27 @@ export default function Dashboard() {
                 ) : (
                   <div className="py-20 text-center text-text-main/20 italic">
                     No reviews written yet.
+                  </div>
+                )}
+              </div>
+            ) : activeTab === "history" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-6">
+                {history.map((item, index) => (
+                  <div key={`${item.history_id}-${index}`} className="relative group/h">
+                    <MovieCard movie={item} />
+                    <div className="absolute top-2 right-2 z-30 opacity-0 group-hover/h:opacity-100 transition-opacity">
+                       <DeleteButton 
+                          onDelete={() => handleDeleteHistoryItem(item.history_id)}
+                          label=""
+                          confirmMessage="Remove?"
+                          className="bg-bg-main/80 backdrop-blur-md rounded-full p-1 border border-white/10"
+                       />
+                    </div>
+                  </div>
+                ))}
+                {history.length === 0 && (
+                  <div className="col-span-full py-20 text-center text-text-main/20 italic">
+                    No viewing history yet.
                   </div>
                 )}
               </div>

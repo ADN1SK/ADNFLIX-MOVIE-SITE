@@ -27,7 +27,7 @@ export default function ReviewsFeed() {
 
   const fetchReviews = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/reviews");
+      const res = await fetch("/api/reviews");
       if (!res.ok) throw new Error("Failed to fetch reviews");
       const data: Review[] = await res.json();
 
@@ -36,7 +36,7 @@ export default function ReviewsFeed() {
         data.map(async (review) => {
           try {
             const commentsRes = await fetch(
-              `http://127.0.0.1:5000/api/reviews/${review.id}/comments`
+              `/api/reviews/${review.id}/comments`
             );
             const commentsData: Comment[] = commentsRes.ok ? await commentsRes.json() : [];
             
@@ -209,17 +209,17 @@ export default function ReviewsFeed() {
                 <div className="flex items-center justify-between border-t border-text-main/5 pt-4">
                   <button
                     onClick={() => toggleComments(review.id)}
-                    className="flex items-center gap-2 text-xs font-bold text-text-main/40 hover:text-white transition-colors cursor-pointer"
+                    className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-white/5 border border-white/5 text-xs font-bold text-text-main/40 hover:bg-white/10 hover:text-white transition-all cursor-pointer group/btn"
                   >
-                    <MessageSquare className="w-4 h-4 text-primary" />
-                    <span>
+                    <MessageSquare className="w-4 h-4 text-primary group-hover/btn:scale-110 transition-transform" />
+                    <span className="tracking-tight">
                       {review.totalCommentCount || 0}{" "}
                       {review.totalCommentCount === 1 ? "Comment" : "Comments"}
                     </span>
                     {review.isCommentsExpanded ? (
-                      <ChevronUp className="w-3.5 h-3.5" />
+                      <ChevronUp className="w-3.5 h-3.5 opacity-40" />
                     ) : (
-                      <ChevronDown className="w-3.5 h-3.5" />
+                      <ChevronDown className="w-3.5 h-3.5 opacity-40" />
                     )}
                   </button>
                 </div>
